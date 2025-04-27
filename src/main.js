@@ -18,7 +18,7 @@ async function initWebGPU() {
   context.configure({
       device: device,
       format: format,
-      alphaMode: 'opaque',
+      alphaMode: 'premultiplied',  // Change from 'opaque' to 'premultiplied' for transparency
   });
 
   return { device, context, format };
@@ -34,6 +34,30 @@ async function main() {
   let lastMouseX = 0;
   let lastMouseY = 0;
   const rotationSpeed = 0.01;
+  
+  // Define the size of each billboard
+  const size = 0.5;
+  
+  // Add particle system state
+  const particleCount = 50; // Fixed number of particles
+  let particles = [];
+  let lastTime = performance.now();
+  
+  // Get lifetime slider elements
+  const lifetimeSlider = document.getElementById('lifetime-slider');
+  const lifetimeValue = document.getElementById('lifetime-value');
+  
+  // Update the lifetime value display when slider changes
+  lifetimeSlider.addEventListener('input', () => {
+    const value = lifetimeSlider.value;
+    lifetimeValue.textContent = `${value} sec`;
+  });
+  
+  // Create respawn button listener
+  const respawnButton = document.getElementById('respawn-button');
+  respawnButton.addEventListener('click', () => {
+    spawnParticles();
+  });
   
   // Add mouse event listeners
   const canvas = document.getElementById('webgpu-canvas');
@@ -64,38 +88,61 @@ async function main() {
     }
   });
   
-  // Define billboard positions (offsets from origin)
-  const billboardPositions = [
-    [0, 0, 0],      // Center
-    [2, 0, 0],      // Right
-    [-2, 0, 0],     // Left
-    [0, 2, 0],      // Top
-    [0, -2, 0],     // Bottom
-    [0, 0, 2],      // Front
-    [0, 0, -2]      // Back
-    
-  ];
+  // Set up buffers with max capacity
+  const maxVertexBufferSize = particleCount * 4 * 10 * 4; // particleCount * 4 vertices * 10 floats * 4 bytes
+  const maxIndexBufferSize = particleCount * 6 * 2; // particleCount * 6 indices * 2 bytes
   
-  // Define billboard size (add this near your billboard positions)
-  const size = 0.5;
-  
-  // Create all billboards
-  const { vertices, indices } = createBillboards(billboardPositions);
-  
-  // Create vertex buffer 
+  // Create vertex buffer
   const vertexBuffer = device.createBuffer({
-    size: vertices.byteLength,
+    size: maxVertexBufferSize,
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
   });
-  device.queue.writeBuffer(vertexBuffer, 0, vertices);
-
+  
   // Create index buffer
   const indexBuffer = device.createBuffer({
-    size: indices.byteLength,
+    size: maxIndexBufferSize,
     usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
   });
-  device.queue.writeBuffer(indexBuffer, 0, indices);
   
+  // Track how many indices to draw
+  let indexCount = 0;
+  
+  // Function to spawn particles
+  function spawnParticles() {
+    particles = [];
+    // Get the base lifetime from the slider
+    const baseLifetime = parseFloat(lifetimeSlider.value);
+    
+    for (let i = 0; i < particleCount; i++) {
+      particles.push({
+        position: [
+          (Math.random() - 0.5) * 10, // Random position between -5 and 5
+          (Math.random() - 0.5) * 10,
+          (Math.random() - 0.5) * 10
+        ],
+        lifetime: baseLifetime + Math.random() * 2, // Base lifetime plus some randomness
+        age: 0,
+        color: [
+          Math.random(), // Random RGB color
+          Math.random(),
+          Math.random()
+        ]
+      });
+    }
+    updateBuffers();
+  }
+  
+  // Function to update vertex and index buffers
+  function updateBuffers() {
+    const { vertices, indices } = createBillboardsFromParticles(particles);
+    device.queue.writeBuffer(vertexBuffer, 0, vertices);
+    device.queue.writeBuffer(indexBuffer, 0, indices);
+    indexCount = indices.length;
+  }
+  
+  // Initialize with particles (moved to after buffer creation)
+  spawnParticles();
+
   // Create a uniform buffer for the transformation matrix + camera position
   // The shader expects at least 80 bytes, so we'll create a buffer of that size
   const uniformBufferSize = 80; // Aligned size for MVP matrix + camera position
@@ -104,7 +151,7 @@ async function main() {
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
-  // Create the shader module with improved billboarding
+  // Create the shader module with improved billboarding and alpha support
   const shaderModule = device.createShaderModule({
     code: `
       struct Uniforms {
@@ -119,11 +166,13 @@ async function main() {
         @location(0) position : vec3<f32>,
         @location(1) color : vec3<f32>,
         @location(2) centerPosition : vec3<f32>,
+        @location(3) alpha : f32,
       }
 
       struct VertexOutput {
         @builtin(position) position : vec4<f32>,
         @location(0) color : vec3<f32>,
+        @location(1) alpha : f32,
       }
 
       @vertex
@@ -157,12 +206,13 @@ async function main() {
         
         output.position = finalPosition;
         output.color = input.color;
+        output.alpha = input.alpha;
         return output;
       }
 
       @fragment
       fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-        return vec4<f32>(input.color, 1.0);
+        return vec4<f32>(input.color, input.alpha);
       }
     `,
   });
@@ -180,14 +230,14 @@ async function main() {
     bindGroupLayouts: [bindGroupLayout],
   });
 
-  // Create the render pipeline
+  // Create the render pipeline with alpha blending
   const pipeline = device.createRenderPipeline({
     layout: pipelineLayout,
     vertex: {
       module: shaderModule,
       entryPoint: 'vs_main',
       buffers: [{
-        arrayStride: 9 * 4, // 9 floats (3 position, 3 color, 3 center)
+        arrayStride: 10 * 4, // 10 floats (3 position, 3 color, 3 center, 1 alpha)
         attributes: [
           { // position
             shaderLocation: 0,
@@ -204,6 +254,11 @@ async function main() {
             offset: 6 * 4,
             format: 'float32x3',
           },
+          { // alpha (transparency)
+            shaderLocation: 3,
+            offset: 9 * 4,
+            format: 'float32',
+          },
         ],
       }],
     },
@@ -212,6 +267,18 @@ async function main() {
       entryPoint: 'fs_main',
       targets: [{
         format: format,
+        blend: {
+          color: {
+            srcFactor: 'src-alpha',
+            dstFactor: 'one-minus-src-alpha',
+            operation: 'add',
+          },
+          alpha: {
+            srcFactor: 'one',
+            dstFactor: 'one-minus-src-alpha',
+            operation: 'add',
+          },
+        },
       }],
     },
     primitive: {
@@ -258,7 +325,26 @@ async function main() {
   }
 
   // Animation loop
-  function frame() {
+  function frame(currentTime) {
+    // Calculate delta time in seconds
+    const deltaTime = (currentTime - lastTime) / 1000;
+    lastTime = currentTime;
+    
+    // Update particle ages
+    let needsUpdate = false;
+    for (let i = 0; i < particles.length; i++) {
+      particles[i].age += deltaTime;
+      // Flag for update if any particle age changed significantly
+      if (particles[i].age % 0.1 < deltaTime) {
+        needsUpdate = true;
+      }
+    }
+    
+    // Update buffers if needed (only when alpha changes significantly)
+    if (needsUpdate) {
+      updateBuffers();
+    }
+    
     const aspect = canvas.width / canvas.height;
     const projectionMatrix = createProjectionMatrix(aspect);
     
@@ -313,7 +399,12 @@ async function main() {
     passEncoder.setBindGroup(0, bindGroup);
     passEncoder.setVertexBuffer(0, vertexBuffer);
     passEncoder.setIndexBuffer(indexBuffer, 'uint16');
-    passEncoder.drawIndexed(indices.length);
+    
+    // Only draw if we have particles
+    if (indexCount > 0) {
+      passEncoder.drawIndexed(indexCount);
+    }
+    
     passEncoder.end();
     device.queue.submit([commandEncoder.finish()]);
     
@@ -376,132 +467,69 @@ async function main() {
     return result;
   }
   
-  // Helper function to create a billboard matrix (always faces camera)
-  function createBillboardRotation(cameraPos) {
-    // Calculate the direction from origin toward the camera
-    const direction = normalizeVector([
-      -cameraPos[0],  // Negate to make it point toward the camera
-      -cameraPos[1], 
-      -cameraPos[2]
-    ]);
+  // Helper function to create billboards from particles
+  function createBillboardsFromParticles(particles) {
+    const allVertices = [];
+    const allIndices = [];
     
-    // Use the world up vector
-    const worldUp = [0, 1, 0];
+    particles.forEach((particle, particleIndex) => {
+      const pos = particle.position;
+      
+      // Calculate alpha based on age (fade out as it gets older)
+      const lifeRatio = particle.age / particle.lifetime;
+      const alpha = Math.max(0, 1.0 - lifeRatio); // Fade out over lifetime
+      
+      // Skip particles that are completely transparent
+      if (alpha <= 0.01) return;
+      
+      // Base particle color
+      const r = particle.color[0];
+      const g = particle.color[1];
+      const b = particle.color[2];
+      
+      const corners = [
+        [-size, -size, 0], // bottom-left
+        [size, -size, 0],  // bottom-right
+        [size, size, 0],   // top-right
+        [-size, size, 0]   // top-left
+      ];
+      
+      // Add vertices for this billboard
+      corners.forEach((corner, i) => {
+        // Position (with offset)
+        allVertices.push(corner[0] + pos[0]); // x
+        allVertices.push(corner[1] + pos[1]); // y
+        allVertices.push(corner[2] + pos[2]); // z
+        
+        // Color
+        allVertices.push(r);
+        allVertices.push(g);
+        allVertices.push(b);
+        
+        // Billboard center (for GPU billboarding)
+        allVertices.push(pos[0]);
+        allVertices.push(pos[1]);
+        allVertices.push(pos[2]);
+        
+        // Alpha (transparency)
+        allVertices.push(alpha);
+      });
+      
+      // Add indices for only the visible particles
+      const indexOffset = allVertices.length / 10 - 4; // 10 values per vertex, 4 vertices per particle
+      allIndices.push(indexOffset + 0, indexOffset + 1, indexOffset + 2);
+      allIndices.push(indexOffset + 2, indexOffset + 3, indexOffset + 0);
+    });
     
-    // Calculate right vector (perpendicular to direction and worldUp)
-    const right = normalizeVector(crossProduct(worldUp, direction));
-    
-    // Calculate the corrected up vector (to ensure orthogonality)
-    const up = normalizeVector(crossProduct(direction, right));
-    
-    // Create a rotation matrix that aligns with the camera view
-    return new Float32Array([
-      right[0], right[1], right[2], 0,
-      up[0], up[1], up[2], 0,
-      direction[0], direction[1], direction[2], 0,
-      0, 0, 0, 1
-    ]);
+    return {
+      vertices: new Float32Array(allVertices),
+      indices: new Uint16Array(allIndices)
+    };
   }
 
   // Start the animation loop
+  lastTime = performance.now();
   requestAnimationFrame(frame);
-}
-
-// Function to create multiple billboards
-function createBillboards(positions) {
-  const size = 0.5;
-  const allVertices = [];
-  const allIndices = [];
-  
-  positions.forEach((pos, billboardIndex) => {
-    const colors = [
-      [1.0, 1.0, 1.0],
-      [1.0, 1.0, 1.0],
-      [1.0, 1.0, 1.0],
-      [1.0, 1.0, 1.0] 
-    ];
-    
-    const corners = [
-      [-size, -size, 0], // bottom-left
-      [size, -size, 0],  // bottom-right
-      [size, size, 0],   // top-right
-      [-size, size, 0]   // top-left
-    ];
-    
-    // Add vertices for this billboard
-    corners.forEach((corner, i) => {
-      // Position (with offset)
-      allVertices.push(corner[0] + pos[0]); // x
-      allVertices.push(corner[1] + pos[1]); // y
-      allVertices.push(corner[2] + pos[2]); // z
-      
-      // Color
-      allVertices.push(colors[i][0]);
-      allVertices.push(colors[i][1]);
-      allVertices.push(colors[i][2]);
-      
-      // Billboard center (for GPU billboarding)
-      allVertices.push(pos[0]);
-      allVertices.push(pos[1]);
-      allVertices.push(pos[2]);
-    });
-    
-    // Add indices (same as before)
-    const indexOffset = billboardIndex * 4;
-    allIndices.push(indexOffset + 0, indexOffset + 1, indexOffset + 2);
-    allIndices.push(indexOffset + 2, indexOffset + 3, indexOffset + 0);
-  });
-  
-  return {
-    vertices: new Float32Array(allVertices),
-    indices: new Uint16Array(allIndices)
-  };
-}
-
-// Add this new function to update billboard vertices for camera facing
-function updateBillboardVertices(positions, billboardRotation, size = 0.5) {
-  const allVertices = [];
-  
-  // For each position, create a billboard
-  positions.forEach((pos, billboardIndex) => {
-    // Each billboard has 4 vertices with different colors
-    const colors = [
-      [1.0, 0.0, 0.0], // red
-      [0.0, 1.0, 0.0], // green
-      [0.0, 0.0, 1.0], // blue
-      [1.0, 1.0, 0.0]  // yellow
-    ];
-    
-    // Create 4 vertices for this billboard (a quad)
-    const corners = [
-      [-size, -size, 0], // bottom-left
-      [size, -size, 0],  // bottom-right
-      [size, size, 0],   // top-right
-      [-size, size, 0]   // top-left
-    ];
-    
-    // Add vertices for this billboard
-    corners.forEach((corner, i) => {
-      // Apply billboard rotation to the corner offset
-      const rotatedCorner = [
-        billboardRotation[0] * corner[0] + billboardRotation[4] * corner[1] + billboardRotation[8] * corner[2],
-        billboardRotation[1] * corner[0] + billboardRotation[5] * corner[1] + billboardRotation[9] * corner[2],
-        billboardRotation[2] * corner[0] + billboardRotation[6] * corner[1] + billboardRotation[10] * corner[2]
-      ];
-      
-      // Position (with offset)
-      allVertices.push(rotatedCorner[0] + pos[0]); // x
-      allVertices.push(rotatedCorner[1] + pos[1]); // y
-      allVertices.push(rotatedCorner[2] + pos[2]); // z
-      
-      // Color
-      allVertices.push(colors[i][0]);
-      allVertices.push(colors[i][1]);
-      allVertices.push(colors[i][2]);
-    });
-  });
-  
-  return new Float32Array(allVertices);
 }
 
 main();
