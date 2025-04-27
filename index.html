@@ -4,8 +4,18 @@
   <meta charset="UTF-8">
   <title>WebGPU Particle System</title>
   <style>
-    body { margin: 0; overflow: hidden; }
-    canvas { display: block; }
+    body { 
+      margin: 0; 
+      padding: 0;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+    canvas { 
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
     .controls {
       position: absolute;
       top: 10px;
@@ -14,6 +24,7 @@
       color: white;
       padding: 10px;
       border-radius: 5px;
+      z-index: 10;
     }
     .slider-container {
       margin: 10px 0;
@@ -25,7 +36,7 @@
   </style>
 </head>
 <body>
-  <canvas id="webgpu-canvas" width="800" height="600"></canvas>
+  <canvas id="webgpu-canvas"></canvas>
   
   <div class="controls">
     <button id="respawn-button">Respawn Particles</button>

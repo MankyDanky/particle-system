@@ -2,7 +2,7 @@ import "./style.css"
 
 async function initWebGPU() {
   if (!navigator.gpu) {
-      throw new Error("WebGPU not supported on this browser.");
+    throw new Error("WebGPU not supported on this browser.");
   }
 
   // In your initWebGPU function, make sure the canvas is properly sized
@@ -34,6 +34,10 @@ async function main() {
   let lastMouseX = 0;
   let lastMouseY = 0;
   const rotationSpeed = 0.01;
+  let cameraDistance = 10.0; // Initial camera distance
+  const minZoom = 3.0;       // Minimum zoom distance
+  const maxZoom = 20.0;      // Maximum zoom distance
+  const zoomSpeed = 0.5;     // How fast zooming occurs
   
   // Define the size of each billboard
   const size = 0.5;
@@ -42,6 +46,39 @@ async function main() {
   const particleCount = 50; // Fixed number of particles
   let particles = [];
   let lastTime = performance.now();
+  
+  // Get canvas reference
+  const canvas = document.getElementById('webgpu-canvas');
+  
+  // Create depth texture first
+  let depthTexture = device.createTexture({
+    size: [canvas.width, canvas.height],
+    format: 'depth24plus',
+    usage: GPUTextureUsage.RENDER_ATTACHMENT,
+  });
+  
+  // Now define resize function after depthTexture is created
+  function resizeCanvasToDisplaySize() {
+    // Set the canvas size to match the window size
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    
+    // Since depthTexture is already defined, we can safely access it
+    depthTexture.destroy();
+    depthTexture = device.createTexture({
+      size: [canvas.width, canvas.height],
+      format: 'depth24plus',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+  }
+  
+  // Call resize function initially
+  resizeCanvasToDisplaySize();
+  
+  // Add a resize event listener
+  window.addEventListener('resize', () => {
+    resizeCanvasToDisplaySize();
+  });
   
   // Get lifetime slider elements
   const lifetimeSlider = document.getElementById('lifetime-slider');
@@ -60,8 +97,6 @@ async function main() {
   });
   
   // Add mouse event listeners
-  const canvas = document.getElementById('webgpu-canvas');
-  
   canvas.addEventListener('mousedown', (e) => {
     isDragging = true;
     lastMouseX = e.clientX;
@@ -86,6 +121,20 @@ async function main() {
       lastMouseX = e.clientX;
       lastMouseY = e.clientY;
     }
+  });
+  
+  // Add wheel event listener for zooming (after your other mouse event listeners)
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault(); // Prevent page scrolling
+    
+    // Determine zoom direction (positive = zoom out, negative = zoom in)
+    const zoomAmount = e.deltaY * 0.01; // Adjust multiplier for sensitivity
+    
+    // Update camera distance with constraints
+    cameraDistance = Math.max(minZoom, Math.min(maxZoom, cameraDistance + zoomAmount));
+    
+    // Optional: log the current zoom level
+    console.log(`Camera distance: ${cameraDistance.toFixed(2)}`);
   });
   
   // Set up buffers with max capacity
@@ -120,7 +169,7 @@ async function main() {
           (Math.random() - 0.5) * 10,
           (Math.random() - 0.5) * 10
         ],
-        lifetime: baseLifetime + Math.random() * 2, // Base lifetime plus some randomness
+        lifetime: baseLifetime + Math.random() * 2 - 1, // Base lifetime plus some randomness
         age: 0,
         color: [
           Math.random(), // Random RGB color
@@ -151,7 +200,8 @@ async function main() {
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
-  // Create the shader module with improved billboarding and alpha support
+  // Update the shader module code to use distance-based scaling
+
   const shaderModule = device.createShaderModule({
     code: `
       struct Uniforms {
@@ -185,21 +235,26 @@ async function main() {
         // First, transform the billboard center to view space (camera space)
         let viewCenter = uniforms.transform * vec4<f32>(center, 1.0);
         
+        // Calculate distance to camera (for size scaling)
+        let cameraToParticle = length(center - uniforms.cameraPosition);
+        
         // Calculate the vertex position offset (still in local space)
         // This is the offset from the billboard center
         let localOffset = input.position - center;
         
-        // Calculate final position in clip space by adding the local offset directly 
-        // to the view-transformed center point, but only in screen space (x,y)
-        // Scale the offset by a factor to maintain consistent size regardless of depth
-        let scaleFactor = 0.15;  // Adjust this to control billboard size
+        // Calculate size scaling factor - adjust multipliers to taste
+        // 0.15 is the base size when at reference distance (10.0)
+        let baseScaleFactor = 0.15;
+        
+        // This makes particles appear smaller as you zoom out and larger as you zoom in
+        // The division by 10.0 represents a "reference distance" where particle is at base size
+        let distanceScaleFactor = baseScaleFactor * (10.0 / cameraToParticle);
         
         // Add the offset directly to the clip space position
-        // This is the key to proper billboarding - we add local offsets in screen/clip space
         let aspectCorrection = uniforms.aspectRatio;
         let finalPosition = vec4<f32>(
-          viewCenter.x + localOffset.x * scaleFactor * viewCenter.w,
-          viewCenter.y + localOffset.y * scaleFactor * aspectCorrection * viewCenter.w,
+          viewCenter.x + localOffset.x * distanceScaleFactor * viewCenter.w,
+          viewCenter.y + localOffset.y * distanceScaleFactor * aspectCorrection * viewCenter.w,
           viewCenter.z,
           viewCenter.w
         );
@@ -292,13 +347,6 @@ async function main() {
     },
   });
 
-  // Create depth texture
-  const depthTexture = device.createTexture({
-    size: [canvas.width, canvas.height],
-    format: 'depth24plus',
-    usage: GPUTextureUsage.RENDER_ATTACHMENT,
-  });
-
   // Create bind group
   const bindGroup = device.createBindGroup({
     layout: bindGroupLayout,
@@ -349,7 +397,6 @@ async function main() {
     const projectionMatrix = createProjectionMatrix(aspect);
     
     // Calculate camera position based on spherical coordinates
-    const cameraDistance = 10.0;
     const cameraX = cameraDistance * Math.sin(cameraRotationY) * Math.cos(cameraRotationX);
     const cameraY = cameraDistance * Math.sin(cameraRotationX);
     const cameraZ = cameraDistance * Math.cos(cameraRotationY) * Math.cos(cameraRotationX);
@@ -531,5 +578,7 @@ async function main() {
   lastTime = performance.now();
   requestAnimationFrame(frame);
 }
+
+// Add this function near the top of your main function:
 
 main();
