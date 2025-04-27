@@ -111,10 +111,173 @@ async function main() {
   // Toggle fade effect when checkbox changes
   fadeCheckbox.addEventListener('change', () => {
     fadeEnabled = fadeCheckbox.checked;
-    // Update particles immediately so the effect is visible
+    
+    // Recreate the shader and pipeline to apply the new fade setting
+    createShaderAndPipeline();
+    
+    // Then update the particles to see the effect immediately
     updateBuffers();
   });
+  
+  // Function to create shader and pipeline (so we can recreate them when fade setting changes)
+  function createShaderAndPipeline() {
+    // Update the shader module with current fade setting
+    const shaderModule = device.createShaderModule({
+      code: `
+        struct Uniforms {
+          transform: mat4x4<f32>,
+          cameraPosition: vec3<f32>,
+          aspectRatio: f32,
+        }
 
+        @binding(0) @group(0) var<uniform> uniforms : Uniforms;
+
+        struct VertexInput {
+          // Quad vertices (per-vertex)
+          @location(0) position : vec3<f32>,
+          
+          // Instance data (per-particle)
+          @location(1) particlePosition : vec3<f32>,
+          @location(2) particleColor : vec3<f32>,
+          @location(3) particleAgeAndLife : vec2<f32>,
+        }
+
+        struct VertexOutput {
+          @builtin(position) position : vec4<f32>,
+          @location(0) color : vec3<f32>,
+          @location(1) alpha : f32,
+        }
+
+        @vertex
+        fn vs_main(input: VertexInput) -> VertexOutput {
+          var output : VertexOutput;
+          
+          // Extract instance data
+          let center = input.particlePosition;
+          let age = input.particleAgeAndLife.x;
+          let lifetime = input.particleAgeAndLife.y;
+          
+          // Calculate alpha based on lifetime
+          var alpha = 0.0;
+          if (${fadeEnabled ? "true" : "false"}) {
+            // Fade out over lifetime when enabled
+            let lifeRatio = age / lifetime;
+            alpha = max(0.0, 1.0 - lifeRatio);
+          } else {
+            // Constant opacity when disabled (except for expired particles)
+            alpha = select(0.0, 1.0, age < lifetime);
+          }
+          
+          // First, transform the particle center to view space
+          let viewCenter = uniforms.transform * vec4<f32>(center, 1.0);
+          
+          // Calculate distance to camera (for size scaling)
+          let cameraToParticle = length(center - uniforms.cameraPosition);
+          
+          // Calculate size scaling based on distance
+          let baseScaleFactor = 0.15;
+          let distanceScaleFactor = baseScaleFactor * (10.0 / cameraToParticle);
+          
+          // Apply the vertex offset based on the quad position (billboard technique)
+          // This creates a quad that faces the camera
+          let finalPosition = vec4<f32>(
+            viewCenter.x + input.position.x * distanceScaleFactor * viewCenter.w,
+            viewCenter.y + input.position.y * distanceScaleFactor * viewCenter.w,
+            viewCenter.z,
+            viewCenter.w
+          );
+          
+          output.position = finalPosition;
+          output.color = input.particleColor;
+          output.alpha = alpha;
+          return output;
+        }
+
+        @fragment
+        fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+          return vec4<f32>(input.color, input.alpha);
+        }
+      `,
+    });
+
+    // Create the render pipeline with instanced rendering
+    pipeline = device.createRenderPipeline({
+      layout: pipelineLayout,
+      vertex: {
+        module: shaderModule,
+        entryPoint: 'vs_main',
+        buffers: [
+          // Vertex attributes (per vertex of the quad)
+          {
+            arrayStride: 3 * 4, // 3 floats (x, y, z) * 4 bytes
+            stepMode: 'vertex',
+            attributes: [
+              {
+                // Vertex position
+                shaderLocation: 0,
+                offset: 0,
+                format: 'float32x3',
+              }
+            ],
+          },
+          // Instance attributes (per particle)
+          {
+            arrayStride: 8 * 4, // 8 floats per instance * 4 bytes
+            stepMode: 'instance',
+            attributes: [
+              {
+                // Particle position
+                shaderLocation: 1,
+                offset: 0,
+                format: 'float32x3',
+              },
+              {
+                // Particle color
+                shaderLocation: 2,
+                offset: 3 * 4,
+                format: 'float32x3',
+              },
+              {
+                // Particle age and lifetime
+                shaderLocation: 3,
+                offset: 6 * 4,
+                format: 'float32x2',
+              }
+            ],
+          }
+        ],
+      },
+      fragment: {
+        module: shaderModule,
+        entryPoint: 'fs_main',
+        targets: [{
+          format: format,
+          blend: {
+            color: {
+              srcFactor: 'src-alpha',
+              dstFactor: 'one-minus-src-alpha',
+              operation: 'add',
+            },
+            alpha: {
+              srcFactor: 'one',
+              dstFactor: 'one-minus-src-alpha',
+              operation: 'add',
+            },
+          },
+        }],
+      },
+      primitive: {
+        topology: 'triangle-list',
+        cullMode: 'none',
+      },
+      depthStencil: {
+        depthWriteEnabled: true,
+        depthCompare: 'less',
+        format: 'depth24plus',
+      },
+    });
+  }
+  
   // Create respawn button listener
   const respawnButton = document.getElementById('respawn-button');
   respawnButton.addEventListener('click', () => {
@@ -287,85 +450,6 @@ async function main() {
   spawnParticles();
 
   // Set up the pipeline
-  // Update the shader module with fixed syntax
-  const shaderModule = device.createShaderModule({
-    code: `
-      struct Uniforms {
-        transform: mat4x4<f32>,
-        cameraPosition: vec3<f32>,
-        aspectRatio: f32,
-      }
-
-      @binding(0) @group(0) var<uniform> uniforms : Uniforms;
-
-      struct VertexInput {
-        // Quad vertices (per-vertex)
-        @location(0) position : vec3<f32>,
-        
-        // Instance data (per-particle)
-        @location(1) particlePosition : vec3<f32>,
-        @location(2) particleColor : vec3<f32>,
-        @location(3) particleAgeAndLife : vec2<f32>,
-      }
-
-      struct VertexOutput {
-        @builtin(position) position : vec4<f32>,
-        @location(0) color : vec3<f32>,
-        @location(1) alpha : f32,
-      }
-
-      @vertex
-      fn vs_main(input: VertexInput) -> VertexOutput {
-        var output : VertexOutput;
-        
-        // Extract instance data
-        let center = input.particlePosition;
-        let age = input.particleAgeAndLife.x;
-        let lifetime = input.particleAgeAndLife.y;
-        
-        // Calculate alpha based on lifetime
-        var alpha = 0.0;
-        if (${fadeEnabled ? "true" : "false"}) {
-          // Fade out over lifetime when enabled
-          let lifeRatio = age / lifetime;
-          alpha = max(0.0, 1.0 - lifeRatio);
-        } else {
-          // Constant opacity when disabled (except for expired particles)
-          alpha = select(0.0, 1.0, age < lifetime);
-        }
-        
-        // First, transform the particle center to view space
-        let viewCenter = uniforms.transform * vec4<f32>(center, 1.0);
-        
-        // Calculate distance to camera (for size scaling)
-        let cameraToParticle = length(center - uniforms.cameraPosition);
-        
-        // Calculate size scaling based on distance
-        let baseScaleFactor = 0.15;
-        let distanceScaleFactor = baseScaleFactor * (10.0 / cameraToParticle);
-        
-        // Apply the vertex offset based on the quad position (billboard technique)
-        // This creates a quad that faces the camera
-        let finalPosition = vec4<f32>(
-          viewCenter.x + input.position.x * distanceScaleFactor * viewCenter.w,
-          viewCenter.y + input.position.y * distanceScaleFactor * viewCenter.w,
-          viewCenter.z,
-          viewCenter.w
-        );
-        
-        output.position = finalPosition;
-        output.color = input.particleColor;
-        output.alpha = alpha;
-        return output;
-      }
-
-      @fragment
-      fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-        return vec4<f32>(input.color, input.alpha);
-      }
-    `,
-  });
-
   // Create the pipeline layout
   const bindGroupLayout = device.createBindGroupLayout({
     entries: [{
@@ -379,82 +463,11 @@ async function main() {
     bindGroupLayouts: [bindGroupLayout],
   });
 
-  // Create the render pipeline with instanced rendering
-  const pipeline = device.createRenderPipeline({
-    layout: pipelineLayout,
-    vertex: {
-      module: shaderModule,
-      entryPoint: 'vs_main',
-      buffers: [
-        // Vertex attributes (per vertex of the quad)
-        {
-          arrayStride: 3 * 4, // 3 floats (x, y, z) * 4 bytes
-          stepMode: 'vertex',
-          attributes: [
-            {
-              // Vertex position
-              shaderLocation: 0,
-              offset: 0,
-              format: 'float32x3',
-            }
-          ],
-        },
-        // Instance attributes (per particle)
-        {
-          arrayStride: 8 * 4, // 8 floats per instance * 4 bytes
-          stepMode: 'instance',
-          attributes: [
-            {
-              // Particle position
-              shaderLocation: 1,
-              offset: 0,
-              format: 'float32x3',
-            },
-            {
-              // Particle color
-              shaderLocation: 2,
-              offset: 3 * 4,
-              format: 'float32x3',
-            },
-            {
-              // Particle age and lifetime
-              shaderLocation: 3,
-              offset: 6 * 4,
-              format: 'float32x2',
-            }
-          ],
-        }
-      ],
-    },
-    fragment: {
-      module: shaderModule,
-      entryPoint: 'fs_main',
-      targets: [{
-        format: format,
-        blend: {
-          color: {
-            srcFactor: 'src-alpha',
-            dstFactor: 'one-minus-src-alpha',
-            operation: 'add',
-          },
-          alpha: {
-            srcFactor: 'one',
-            dstFactor: 'one-minus-src-alpha',
-            operation: 'add',
-          },
-        },
-      }],
-    },
-    primitive: {
-      topology: 'triangle-list',
-      cullMode: 'none',
-    },
-    depthStencil: {
-      depthWriteEnabled: true,
-      depthCompare: 'less',
-      format: 'depth24plus',
-    },
-  });
+  // Create a variable for the pipeline (instead of a constant)
+  let pipeline;
+  
+  // Call the function to initially create the shader and pipeline
+  createShaderAndPipeline();
 
   // Create bind group
   const bindGroup = device.createBindGroup({
