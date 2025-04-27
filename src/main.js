@@ -64,37 +64,37 @@ async function main() {
     }
   });
   
-  // First, let's modify the vertex definition to create a simple quad instead of a cube
+  // Define billboard positions (offsets from origin)
+  const billboardPositions = [
+    [0, 0, 0],      // Center
+    [2, 0, 0],      // Right
+    [-2, 0, 0],     // Left
+    [0, 2, 0],      // Top
+    [0, -2, 0],     // Bottom
+    [0, 0, 2],      // Front
+    [0, 0, -2]      // Back
+  ];
   
-  // Define quad vertices (position and color)
-  const vertices = new Float32Array([
-    // Single quad with position and color
-    -0.5, -0.5, 0.0,  1.0, 0.0, 0.0, // bottom-left, red
-     0.5, -0.5, 0.0,  0.0, 1.0, 0.0, // bottom-right, green
-     0.5,  0.5, 0.0,  0.0, 0.0, 1.0, // top-right, blue
-    -0.5,  0.5, 0.0,  1.0, 1.0, 0.0, // top-left, yellow
-  ]);
-
-  // Define indices for the quad (2 triangles)
-  const indices = new Uint16Array([
-    0, 1, 2,  // first triangle
-    2, 3, 0   // second triangle
-  ]);
-
-  // Create vertex buffer (same as before)
+  // Define billboard size (add this near your billboard positions)
+  const size = 0.5;
+  
+  // Create all billboards
+  const { vertices, indices } = createBillboards(billboardPositions);
+  
+  // Create vertex buffer 
   const vertexBuffer = device.createBuffer({
     size: vertices.byteLength,
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
   });
   device.queue.writeBuffer(vertexBuffer, 0, vertices);
 
-  // Create index buffer (same as before)
+  // Create index buffer
   const indexBuffer = device.createBuffer({
     size: indices.byteLength,
     usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
   });
   device.queue.writeBuffer(indexBuffer, 0, indices);
-
+  
   // Create a uniform buffer for the transformation matrix
   const uniformBufferSize = 4 * 4 * 4; // 4x4 matrix of 4-byte floats
   const uniformBuffer = device.createBuffer({
@@ -224,14 +224,11 @@ async function main() {
   // Animation loop
   function frame() {
     console.log("Rendering frame");
-    // Simple model-view-projection matrix
     const aspect = canvas.width / canvas.height;
     const projectionMatrix = createProjectionMatrix(aspect);
     
-    // Create view matrix with camera orbit controls
-    const cameraDistance = 5.0;
-    
     // Calculate camera position based on spherical coordinates
+    const cameraDistance = 10.0;
     const cameraX = cameraDistance * Math.sin(cameraRotationY) * Math.cos(cameraRotationX);
     const cameraY = cameraDistance * Math.sin(cameraRotationX);
     const cameraZ = cameraDistance * Math.cos(cameraRotationY) * Math.cos(cameraRotationX);
@@ -243,22 +240,27 @@ async function main() {
     const viewMatrix = createLookAtMatrix(
       cameraPos,                // camera position
       [0, 0, 0],                // target (looking at origin)
-      [0, 1, 0]                 // up vector
+      [0, 1, 0]                 // world up vector
     );
     
-    // Create billboard matrix - this will make the quad face the camera
-    const billboardMatrix = createBillboardMatrix(cameraPos);
+    // For billboarding effect, we need to:
+    // 1. Update the billboard vertices each frame to face the camera
+    // 2. Keep their positions fixed in world space
     
-    // Multiply billboard with view matrix
-    const mvMatrix = multiplyMatrices(viewMatrix, billboardMatrix);
+    // Get the billboard rotation matrix
+    const billboardRotation = createBillboardRotation(cameraPos);
     
-    // Multiply with projection matrix
-    const mvpMatrix = multiplyMatrices(projectionMatrix, mvMatrix);
+    // Update vertex buffer with rotated billboard vertices
+    const updatedVertices = updateBillboardVertices(billboardPositions, billboardRotation, size);
+    device.queue.writeBuffer(vertexBuffer, 0, updatedVertices);
     
-    // Write the transformation matrix to the uniform buffer
+    // Use the view-projection matrix directly (keep this part unchanged)
+    const mvpMatrix = multiplyMatrices(projectionMatrix, viewMatrix);
+    
+    // Write this matrix to the uniform buffer
     device.queue.writeBuffer(uniformBuffer, 0, mvpMatrix);
     
-    // Rest of rendering code...
+    // Rest of rendering code (unchanged)...
     const commandEncoder = device.createCommandEncoder();
     
     const renderPassDescriptor = {
@@ -281,7 +283,7 @@ async function main() {
     passEncoder.setBindGroup(0, bindGroup);
     passEncoder.setVertexBuffer(0, vertexBuffer);
     passEncoder.setIndexBuffer(indexBuffer, 'uint16');
-    passEncoder.drawIndexed(6); // Drawing 6 indices (2 triangles) instead of 36
+    passEncoder.drawIndexed(indices.length);
     passEncoder.end();
     device.queue.submit([commandEncoder.finish()]);
     
@@ -345,12 +347,12 @@ async function main() {
   }
   
   // Helper function to create a billboard matrix (always faces camera)
-  function createBillboardMatrix(cameraPos) {
-    // Calculate the direction from the billboard to the camera
+  function createBillboardRotation(cameraPos) {
+    // Calculate the direction from origin toward the camera
     const direction = normalizeVector([
-      cameraPos[0], 
-      cameraPos[1], 
-      cameraPos[2]
+      -cameraPos[0],  // Negate to make it point toward the camera
+      -cameraPos[1], 
+      -cameraPos[2]
     ]);
     
     // Use the world up vector
@@ -359,10 +361,10 @@ async function main() {
     // Calculate right vector (perpendicular to direction and worldUp)
     const right = normalizeVector(crossProduct(worldUp, direction));
     
-    // Calculate the corrected up vector
-    const up = crossProduct(direction, right);
+    // Calculate the corrected up vector (to ensure orthogonality)
+    const up = normalizeVector(crossProduct(direction, right));
     
-    // Create a rotation matrix that makes the quad face the camera
+    // Create a rotation matrix that aligns with the camera view
     return new Float32Array([
       right[0], right[1], right[2], 0,
       up[0], up[1], up[2], 0,
@@ -373,6 +375,104 @@ async function main() {
 
   // Start the animation loop
   requestAnimationFrame(frame);
+}
+
+// Function to create multiple billboards
+function createBillboards(positions) {
+  // Billboard size
+  const size = 0.5;
+  
+  // Arrays to store all vertices and indices
+  const allVertices = [];
+  const allIndices = [];
+  
+  // For each position, create a billboard
+  positions.forEach((pos, billboardIndex) => {
+    // Each billboard has 4 vertices with different colors
+    const colors = [
+      [1.0, 0.0, 0.0], // red
+      [0.0, 1.0, 0.0], // green
+      [0.0, 0.0, 1.0], // blue
+      [1.0, 1.0, 0.0]  // yellow
+    ];
+    
+    // Create 4 vertices for this billboard (a quad)
+    const corners = [
+      [-size, -size, 0], // bottom-left
+      [size, -size, 0],  // bottom-right
+      [size, size, 0],   // top-right
+      [-size, size, 0]   // top-left
+    ];
+    
+    // Add vertices for this billboard
+    corners.forEach((corner, i) => {
+      // Position (with offset)
+      allVertices.push(corner[0] + pos[0]); // x
+      allVertices.push(corner[1] + pos[1]); // y
+      allVertices.push(corner[2] + pos[2]); // z
+      
+      // Color
+      allVertices.push(colors[i][0]);
+      allVertices.push(colors[i][1]);
+      allVertices.push(colors[i][2]);
+    });
+    
+    // Add indices for this billboard (2 triangles)
+    const indexOffset = billboardIndex * 4; // 4 vertices per billboard
+    allIndices.push(indexOffset + 0, indexOffset + 1, indexOffset + 2); // First triangle
+    allIndices.push(indexOffset + 2, indexOffset + 3, indexOffset + 0); // Second triangle
+  });
+  
+  return {
+    vertices: new Float32Array(allVertices),
+    indices: new Uint16Array(allIndices)
+  };
+}
+
+// Add this new function to update billboard vertices for camera facing
+function updateBillboardVertices(positions, billboardRotation, size = 0.5) {
+  const allVertices = [];
+  
+  // For each position, create a billboard
+  positions.forEach((pos, billboardIndex) => {
+    // Each billboard has 4 vertices with different colors
+    const colors = [
+      [1.0, 0.0, 0.0], // red
+      [0.0, 1.0, 0.0], // green
+      [0.0, 0.0, 1.0], // blue
+      [1.0, 1.0, 0.0]  // yellow
+    ];
+    
+    // Create 4 vertices for this billboard (a quad)
+    const corners = [
+      [-size, -size, 0], // bottom-left
+      [size, -size, 0],  // bottom-right
+      [size, size, 0],   // top-right
+      [-size, size, 0]   // top-left
+    ];
+    
+    // Add vertices for this billboard
+    corners.forEach((corner, i) => {
+      // Apply billboard rotation to the corner offset
+      const rotatedCorner = [
+        billboardRotation[0] * corner[0] + billboardRotation[4] * corner[1] + billboardRotation[8] * corner[2],
+        billboardRotation[1] * corner[0] + billboardRotation[5] * corner[1] + billboardRotation[9] * corner[2],
+        billboardRotation[2] * corner[0] + billboardRotation[6] * corner[1] + billboardRotation[10] * corner[2]
+      ];
+      
+      // Position (with offset)
+      allVertices.push(rotatedCorner[0] + pos[0]); // x
+      allVertices.push(rotatedCorner[1] + pos[1]); // y
+      allVertices.push(rotatedCorner[2] + pos[2]); // z
+      
+      // Color
+      allVertices.push(colors[i][0]);
+      allVertices.push(colors[i][1]);
+      allVertices.push(colors[i][2]);
+    });
+  });
+  
+  return new Float32Array(allVertices);
 }
 
 main();
