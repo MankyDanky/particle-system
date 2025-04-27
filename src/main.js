@@ -46,10 +46,15 @@ async function main() {
   
   // Add particle system state - make particleCount variable instead of constant
   let particleCount = 50; // Initial particle count, now variable
-  let particles = [];
+  const MAX_PARTICLES = 10000; // Increased maximum (previously 1000)
+  let activeParticles = 0; // Track actual number of active particles
   let lastTime = performance.now();
   
-  // Get canvas reference
+  // Typed arrays for more efficient particle data management
+  // Structure: [x, y, z, r, g, b, age, lifetime] for each particle
+  const particleData = new Float32Array(MAX_PARTICLES * 8);
+  
+  // Get canvas reference and setup
   const canvas = document.getElementById('webgpu-canvas');
   
   // Set canvas size to match window size
@@ -158,7 +163,7 @@ async function main() {
   });
   
   // Set up buffers with max capacity - define MAX_PARTICLES as a constant for the upper limit
-  const MAX_PARTICLES = 1000; // Maximum possible particles (matches slider max)
+  // const MAX_PARTICLES = 1000; // Maximum possible particles (matches slider max)
   
   // Create vertex buffer with capacity for maximum particles
   const vertexBuffer = device.createBuffer({
@@ -175,67 +180,132 @@ async function main() {
   // Track how many indices to draw
   let indexCount = 0;
   
-  // Function to spawn particles
-  function spawnParticles() {
-    particles = [];
-    // Get the base lifetime from the slider
-    const baseLifetime = parseFloat(lifetimeSlider.value);
-    
-    for (let i = 0; i < particleCount; i++) {
-      particles.push({
-        position: [
-          (Math.random() - 0.5) * 10, // Random position between -5 and 5
-          (Math.random() - 0.5) * 10,
-          (Math.random() - 0.5) * 10
-        ],
-        lifetime: baseLifetime + Math.random() * 2 - 1, // Base lifetime plus some randomness
-        age: 0,
-        color: [
-          Math.random(), // Random RGB color
-          Math.random(),
-          Math.random()
-        ]
-      });
-    }
-    updateBuffers();
-  }
+  // Create a basic square geometry that will be instanced for all particles
+  const quadVertices = new Float32Array([
+    -size, -size, 0,  // Bottom-left
+    size, -size, 0,   // Bottom-right
+    size, size, 0,    // Top-right
+    -size, size, 0    // Top-left
+  ]);
   
-  // Function to update vertex and index buffers
-  function updateBuffers() {
-    const { vertices, indices } = createBillboardsFromParticles(particles);
-    device.queue.writeBuffer(vertexBuffer, 0, vertices);
-    device.queue.writeBuffer(indexBuffer, 0, indices);
-    indexCount = indices.length;
-  }
+  const quadIndices = new Uint16Array([
+    0, 1, 2,  // First triangle
+    2, 3, 0   // Second triangle
+  ]);
   
-  // Initialize with particles (moved to after buffer creation)
-  spawnParticles();
-
+  // Create basic geometry buffers
+  const quadVertexBuffer = device.createBuffer({
+    size: quadVertices.byteLength,
+    usage: GPUBufferUsage.VERTEX,
+    mappedAtCreation: true,
+  });
+  new Float32Array(quadVertexBuffer.getMappedRange()).set(quadVertices);
+  quadVertexBuffer.unmap();
+  
+  const quadIndexBuffer = device.createBuffer({
+    size: quadIndices.byteLength,
+    usage: GPUBufferUsage.INDEX,
+    mappedAtCreation: true,
+  });
+  new Uint16Array(quadIndexBuffer.getMappedRange()).set(quadIndices);
+  quadIndexBuffer.unmap();
+  
+  // Create instance buffer for particle data
+  const instanceBuffer = device.createBuffer({
+    size: MAX_PARTICLES * 8 * 4, // 8 floats per instance (position, color, age, lifetime) * 4 bytes per float
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+  });
+  
   // Create a uniform buffer for the transformation matrix + camera position
-  // The shader expects at least 80 bytes, so we'll create a buffer of that size
   const uniformBufferSize = 80; // Aligned size for MVP matrix + camera position
   const uniformBuffer = device.createBuffer({
     size: uniformBufferSize,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
+  
+  // Function to spawn particles
+  function spawnParticles() {
+    // Reset active particles count to start fresh
+    activeParticles = 0;
+    
+    // Get the base lifetime from the slider
+    const baseLifetime = parseFloat(lifetimeSlider.value);
+    
+    for (let i = 0; i < particleCount; i++) {
+      const index = i * 8;
+      
+      // Position (randomly distributed)
+      particleData[index] = (Math.random() - 0.5) * 10;     // x
+      particleData[index + 1] = (Math.random() - 0.5) * 10; // y
+      particleData[index + 2] = (Math.random() - 0.5) * 10; // z
+      
+      // Color (random)
+      particleData[index + 3] = Math.random(); // r
+      particleData[index + 4] = Math.random(); // g
+      particleData[index + 5] = Math.random(); // b
+      
+      // Age and lifetime
+      particleData[index + 6] = 0; // age
+      particleData[index + 7] = baseLifetime + Math.random() * 2 - 1; // lifetime
+    }
+    
+    // Set active particles count
+    activeParticles = particleCount;
+    
+    // Update instance buffer with all particles
+    device.queue.writeBuffer(instanceBuffer, 0, particleData, 0, activeParticles * 8 * 4);
+  }
+  
+  // Function to update particle buffers with instanced rendering
+  function updateBuffers() {
+    // Filter out expired particles and compact the array
+    let newActiveCount = 0;
+    for (let i = 0; i < activeParticles; i++) {
+      const age = particleData[i * 8 + 6];
+      const lifetime = particleData[i * 8 + 7];
+      
+      // Skip expired particles
+      if (age >= lifetime) continue;
+      
+      // If this particle is still alive but not at its current position,
+      // move it to the new compact position
+      if (newActiveCount !== i) {
+        // Copy the entire particle data to the new position
+        for (let j = 0; j < 8; j++) {
+          particleData[newActiveCount * 8 + j] = particleData[i * 8 + j];
+        }
+      }
+      newActiveCount++;
+    }
+    activeParticles = newActiveCount;
+    
+    // Update instance buffer with all active particles
+    device.queue.writeBuffer(instanceBuffer, 0, particleData, 0, activeParticles * 8 * 4);
+  }
+  
+  // Initialize with particles (moved to after buffer creation)
+  spawnParticles();
 
-  // Update the shader module code to use distance-based scaling
-
+  // Set up the pipeline
+  // Update the shader module with fixed syntax
   const shaderModule = device.createShaderModule({
     code: `
       struct Uniforms {
         transform: mat4x4<f32>,
         cameraPosition: vec3<f32>,
-        aspectRatio: f32,  // Canvas width/height
+        aspectRatio: f32,
       }
 
       @binding(0) @group(0) var<uniform> uniforms : Uniforms;
 
       struct VertexInput {
+        // Quad vertices (per-vertex)
         @location(0) position : vec3<f32>,
-        @location(1) color : vec3<f32>,
-        @location(2) centerPosition : vec3<f32>,
-        @location(3) alpha : f32,
+        
+        // Instance data (per-particle)
+        @location(1) particlePosition : vec3<f32>,
+        @location(2) particleColor : vec3<f32>,
+        @location(3) particleAgeAndLife : vec2<f32>,
       }
 
       struct VertexOutput {
@@ -248,39 +318,44 @@ async function main() {
       fn vs_main(input: VertexInput) -> VertexOutput {
         var output : VertexOutput;
         
-        // Get the billboard center position in world space
-        let center = input.centerPosition;
+        // Extract instance data
+        let center = input.particlePosition;
+        let age = input.particleAgeAndLife.x;
+        let lifetime = input.particleAgeAndLife.y;
         
-        // First, transform the billboard center to view space (camera space)
+        // Calculate alpha based on lifetime
+        var alpha = 0.0;
+        if (${fadeEnabled ? "true" : "false"}) {
+          // Fade out over lifetime when enabled
+          let lifeRatio = age / lifetime;
+          alpha = max(0.0, 1.0 - lifeRatio);
+        } else {
+          // Constant opacity when disabled (except for expired particles)
+          alpha = select(0.0, 1.0, age < lifetime);
+        }
+        
+        // First, transform the particle center to view space
         let viewCenter = uniforms.transform * vec4<f32>(center, 1.0);
         
         // Calculate distance to camera (for size scaling)
         let cameraToParticle = length(center - uniforms.cameraPosition);
         
-        // Calculate the vertex position offset (still in local space)
-        // This is the offset from the billboard center
-        let localOffset = input.position - center;
-        
-        // Calculate size scaling factor - adjust multipliers to taste
-        // 0.15 is the base size when at reference distance (10.0)
+        // Calculate size scaling based on distance
         let baseScaleFactor = 0.15;
-        
-        // This makes particles appear smaller as you zoom out and larger as you zoom in
-        // The division by 10.0 represents a "reference distance" where particle is at base size
         let distanceScaleFactor = baseScaleFactor * (10.0 / cameraToParticle);
         
-        // Add the offset directly to the clip space position
-        let aspectCorrection = uniforms.aspectRatio;
+        // Apply the vertex offset based on the quad position (billboard technique)
+        // This creates a quad that faces the camera
         let finalPosition = vec4<f32>(
-          viewCenter.x + localOffset.x * distanceScaleFactor * aspectCorrection * viewCenter.w,
-          viewCenter.y + localOffset.y * distanceScaleFactor * viewCenter.w,
+          viewCenter.x + input.position.x * distanceScaleFactor * viewCenter.w,
+          viewCenter.y + input.position.y * distanceScaleFactor * viewCenter.w,
           viewCenter.z,
           viewCenter.w
         );
         
         output.position = finalPosition;
-        output.color = input.color;
-        output.alpha = input.alpha;
+        output.color = input.particleColor;
+        output.alpha = alpha;
         return output;
       }
 
@@ -304,37 +379,52 @@ async function main() {
     bindGroupLayouts: [bindGroupLayout],
   });
 
-  // Create the render pipeline with alpha blending
+  // Create the render pipeline with instanced rendering
   const pipeline = device.createRenderPipeline({
     layout: pipelineLayout,
     vertex: {
       module: shaderModule,
       entryPoint: 'vs_main',
-      buffers: [{
-        arrayStride: 10 * 4, // 10 floats (3 position, 3 color, 3 center, 1 alpha)
-        attributes: [
-          { // position
-            shaderLocation: 0,
-            offset: 0,
-            format: 'float32x3',
-          },
-          { // color
-            shaderLocation: 1,
-            offset: 3 * 4,
-            format: 'float32x3',
-          },
-          { // billboard center
-            shaderLocation: 2,
-            offset: 6 * 4,
-            format: 'float32x3',
-          },
-          { // alpha (transparency)
-            shaderLocation: 3,
-            offset: 9 * 4,
-            format: 'float32',
-          },
-        ],
-      }],
+      buffers: [
+        // Vertex attributes (per vertex of the quad)
+        {
+          arrayStride: 3 * 4, // 3 floats (x, y, z) * 4 bytes
+          stepMode: 'vertex',
+          attributes: [
+            {
+              // Vertex position
+              shaderLocation: 0,
+              offset: 0,
+              format: 'float32x3',
+            }
+          ],
+        },
+        // Instance attributes (per particle)
+        {
+          arrayStride: 8 * 4, // 8 floats per instance * 4 bytes
+          stepMode: 'instance',
+          attributes: [
+            {
+              // Particle position
+              shaderLocation: 1,
+              offset: 0,
+              format: 'float32x3',
+            },
+            {
+              // Particle color
+              shaderLocation: 2,
+              offset: 3 * 4,
+              format: 'float32x3',
+            },
+            {
+              // Particle age and lifetime
+              shaderLocation: 3,
+              offset: 6 * 4,
+              format: 'float32x2',
+            }
+          ],
+        }
+      ],
     },
     fragment: {
       module: shaderModule,
@@ -357,7 +447,7 @@ async function main() {
     },
     primitive: {
       topology: 'triangle-list',
-      cullMode: 'none',  // Change to 'none' to see both sides of the quad
+      cullMode: 'none',
     },
     depthStencil: {
       depthWriteEnabled: true,
@@ -399,10 +489,10 @@ async function main() {
     
     // Update particle ages
     let needsUpdate = false;
-    for (let i = 0; i < particles.length; i++) {
-      particles[i].age += deltaTime;
+    for (let i = 0; i < activeParticles; i++) {
+      particleData[i * 8 + 6] += deltaTime;
       // Flag for update if any particle age changed significantly
-      if (particles[i].age % 0.1 < deltaTime) {
+      if (particleData[i * 8 + 6] % 0.1 < deltaTime) {
         needsUpdate = true;
       }
     }
@@ -442,7 +532,7 @@ async function main() {
     // Write camera position and aspect at the correct offset
     device.queue.writeBuffer(uniformBuffer, 64, cameraData);
     
-    // Rest of rendering code (unchanged)...
+    // Create a command encoder
     const commandEncoder = device.createCommandEncoder();
     
     const renderPassDescriptor = {
@@ -463,12 +553,15 @@ async function main() {
     const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
     passEncoder.setPipeline(pipeline);
     passEncoder.setBindGroup(0, bindGroup);
-    passEncoder.setVertexBuffer(0, vertexBuffer);
-    passEncoder.setIndexBuffer(indexBuffer, 'uint16');
     
-    // Only draw if we have particles
-    if (indexCount > 0) {
-      passEncoder.drawIndexed(indexCount);
+    // Switch to instanced rendering
+    passEncoder.setVertexBuffer(0, quadVertexBuffer);
+    passEncoder.setVertexBuffer(1, instanceBuffer);
+    passEncoder.setIndexBuffer(quadIndexBuffer, 'uint16');
+    
+    // Draw using instancing (if we have active particles)
+    if (activeParticles > 0) {
+      passEncoder.drawIndexed(6, activeParticles); // 6 indices for quad (2 triangles), instanceCount = activeParticles
     }
     
     passEncoder.end();
