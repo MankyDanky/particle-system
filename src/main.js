@@ -142,19 +142,29 @@ async function main() {
     updateBuffers();
   });
   
+  // Color input event listeners
   particleColorInput.addEventListener('input', () => {
     particleColor = hexToRgb(particleColorInput.value);
-    spawnParticles();
+    // Recreate shader to use new color values immediately
+    createShaderAndPipeline();
+    // Apply color to existing particles
+    updateParticleColors();
   });
   
   startColorInput.addEventListener('input', () => {
     startColor = hexToRgb(startColorInput.value);
-    spawnParticles();
+    // Recreate shader to use new color values immediately
+    createShaderAndPipeline();
+    // Apply color to existing particles
+    updateParticleColors();
   });
   
   endColorInput.addEventListener('input', () => {
     endColor = hexToRgb(endColorInput.value);
-    spawnParticles();
+    // Recreate shader to use new color values immediately
+    createShaderAndPipeline();
+    // Apply color to existing particles
+    updateParticleColors();
   });
   
   // Update size value display when slider changes
@@ -462,6 +472,29 @@ async function main() {
     device.queue.writeBuffer(instanceBuffer, 0, particleData, 0, activeParticles * 8 * 4);
   }
   
+  // Function to update colors of existing particles
+  function updateParticleColors() {
+    for (let i = 0; i < activeParticles; i++) {
+      const index = i * 8;
+      
+      // Update color based on current settings
+      if (colorTransitionEnabled) {
+        particleData[index + 3] = startColor[0];
+        particleData[index + 4] = startColor[1];
+        particleData[index + 5] = startColor[2];
+      } else {
+        particleData[index + 3] = particleColor[0];
+        particleData[index + 4] = particleColor[1];
+        particleData[index + 5] = particleColor[2];
+      }
+    }
+    
+    // Update the buffer with the new colors
+    if (activeParticles > 0) {
+      device.queue.writeBuffer(instanceBuffer, 0, particleData, 0, activeParticles * 8 * 4);
+    }
+  }
+
   // Create pipeline layout
   const bindGroupLayout = device.createBindGroupLayout({
     entries: [{
