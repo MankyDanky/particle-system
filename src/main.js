@@ -103,12 +103,13 @@ async function main() {
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
-  // Create the shader module
+  // Create the shader module with improved billboarding
   const shaderModule = device.createShaderModule({
     code: `
       struct Uniforms {
         transform: mat4x4<f32>,
         cameraPosition: vec3<f32>,
+        aspectRatio: f32,  // Canvas width/height
       }
 
       @binding(0) @group(0) var<uniform> uniforms : Uniforms;
@@ -116,7 +117,7 @@ async function main() {
       struct VertexInput {
         @location(0) position : vec3<f32>,
         @location(1) color : vec3<f32>,
-        @location(2) centerPosition : vec3<f32>, // Billboard center position
+        @location(2) centerPosition : vec3<f32>,
       }
 
       struct VertexOutput {
@@ -128,25 +129,32 @@ async function main() {
       fn vs_main(input: VertexInput) -> VertexOutput {
         var output : VertexOutput;
         
-        // Extract billboard center and local vertex position
-        let billboardCenter = input.centerPosition;
-        let localPos = input.position - billboardCenter;
+        // Get the billboard center position in world space
+        let center = input.centerPosition;
         
-        // Direction from billboard center to camera (for facing)
-        let toCamera = normalize(uniforms.cameraPosition - billboardCenter);
+        // First, transform the billboard center to view space (camera space)
+        let viewCenter = uniforms.transform * vec4<f32>(center, 1.0);
         
-        // Calculate billboard orientation axes
-        let worldUp = vec3<f32>(0.0, 1.0, 0.0);
-        let right = normalize(cross(worldUp, toCamera));
-        let up = cross(toCamera, right);
+        // Calculate the vertex position offset (still in local space)
+        // This is the offset from the billboard center
+        let localOffset = input.position - center;
         
-        // Reorient the vertex relative to billboard center
-        let billboardPos = billboardCenter + 
-                            right * localPos.x +
-                            up * localPos.y;
+        // Calculate final position in clip space by adding the local offset directly 
+        // to the view-transformed center point, but only in screen space (x,y)
+        // Scale the offset by a factor to maintain consistent size regardless of depth
+        let scaleFactor = 0.15;  // Adjust this to control billboard size
         
-        // Transform to clip space
-        output.position = uniforms.transform * vec4<f32>(billboardPos, 1.0);
+        // Add the offset directly to the clip space position
+        // This is the key to proper billboarding - we add local offsets in screen/clip space
+        let aspectCorrection = uniforms.aspectRatio;
+        let finalPosition = vec4<f32>(
+          viewCenter.x + localOffset.x * scaleFactor * viewCenter.w,
+          viewCenter.y + localOffset.y * scaleFactor * aspectCorrection * viewCenter.w,
+          viewCenter.z,
+          viewCenter.w
+        );
+        
+        output.position = finalPosition;
         output.color = input.color;
         return output;
       }
@@ -250,7 +258,6 @@ async function main() {
 
   // Animation loop
   function frame() {
-    console.log("Rendering frame");
     const aspect = canvas.width / canvas.height;
     const projectionMatrix = createProjectionMatrix(aspect);
     
@@ -270,28 +277,16 @@ async function main() {
       [0, 1, 0]                 // world up vector
     );
     
-    // For billboarding effect, we need to:
-    // 1. Update the billboard vertices each frame to face the camera
-    // 2. Keep their positions fixed in world space
-    
-    // Get the billboard rotation matrix
-    // const billboardRotation = createBillboardRotation(cameraPos);
-    
-    // Update vertex buffer with rotated billboard vertices
-    // const updatedVertices = updateBillboardVertices(billboardPositions, billboardRotation, size);
-    // device.queue.writeBuffer(vertexBuffer, 0, updatedVertices);
-    
     // Create a combined view-projection matrix
     const mvpMatrix = multiplyMatrices(projectionMatrix, viewMatrix);
     
     // Write MVP matrix to the uniform buffer
     device.queue.writeBuffer(uniformBuffer, 0, mvpMatrix);
     
-    // Create a Float32Array with camera position (with padding for alignment)
-    const cameraData = new Float32Array([cameraX, cameraY, cameraZ, 0.0]);
+    // Create a Float32Array with camera position and aspect ratio
+    const cameraData = new Float32Array([cameraX, cameraY, cameraZ, aspect]);
     
-    // Write camera position at the correct offset (after the MVP matrix)
-    // Matrix is 64 bytes, camera position is 16 bytes
+    // Write camera position and aspect at the correct offset
     device.queue.writeBuffer(uniformBuffer, 64, cameraData);
     
     // Rest of rendering code (unchanged)...
