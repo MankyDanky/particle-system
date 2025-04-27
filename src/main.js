@@ -41,10 +41,18 @@ async function main() {
   const size = 0.5;
   
   // Particle system state
-  let particleCount = 50;
+  let particleCount = 100; // Default for burst mode
   const MAX_PARTICLES = 10000;
   let activeParticles = 0;
   let lastTime = performance.now();
+  let emissionTimer = 0;
+  let currentEmissionTime = 0;
+  let emitting = false;
+  let burstMode = false;
+  
+  // Emission settings
+  let emissionRate = 10; // particles per second
+  let emissionDuration = 10; // seconds
   
   // Typed array for particle data: [x, y, z, r, g, b, age, lifetime]
   const particleData = new Float32Array(MAX_PARTICLES * 8);
@@ -79,8 +87,15 @@ async function main() {
   // Get UI elements
   const lifetimeSlider = document.getElementById('lifetime-slider');
   const lifetimeValue = document.getElementById('lifetime-value');
-  const countSlider = document.getElementById('count-slider');
-  const countValue = document.getElementById('count-value');
+  const emissionDurationSlider = document.getElementById('emission-duration-slider');
+  const emissionDurationValue = document.getElementById('emission-duration-value');
+  const emissionRateSlider = document.getElementById('emission-rate-slider');
+  const emissionRateValue = document.getElementById('emission-rate-value');
+  const particleCountSlider = document.getElementById('particle-count-slider');
+  const particleCountValue = document.getElementById('particle-count-value');
+  const burstCheckbox = document.getElementById('burst-checkbox');
+  const continuousEmissionContainer = document.getElementById('continuous-emission-container');
+  const burstEmissionContainer = document.getElementById('burst-emission-container');
   const sizeSlider = document.getElementById('size-slider');
   const sizeValue = document.getElementById('size-value');
   const speedSlider = document.getElementById('speed-slider');
@@ -121,10 +136,16 @@ async function main() {
     lifetimeValue.textContent = `${value} sec`;
   });
   
-  countSlider.addEventListener('input', () => {
-    const value = countSlider.value;
-    countValue.textContent = value;
-    particleCount = parseInt(value);
+  emissionDurationSlider.addEventListener('input', () => {
+    const value = emissionDurationSlider.value;
+    emissionDurationValue.textContent = `${value} sec`;
+    emissionDuration = parseFloat(value);
+  });
+  
+  emissionRateSlider.addEventListener('input', () => {
+    const value = emissionRateSlider.value;
+    emissionRateValue.textContent = `${value} particles/sec`;
+    emissionRate = parseFloat(value);
   });
   
   fadeCheckbox.addEventListener('change', () => {
@@ -195,6 +216,36 @@ async function main() {
     // No need to recreate shader, just update velocity for existing particles
     updateParticleVelocities();
   });
+  
+  // Update particle count slider
+  particleCountSlider.addEventListener('input', () => {
+    const value = particleCountSlider.value;
+    particleCountValue.textContent = value;
+    particleCount = parseInt(value);
+  });
+  
+  // Toggle between continuous and burst mode
+  burstCheckbox.addEventListener('change', () => {
+    burstMode = burstCheckbox.checked;
+    
+    if (burstMode) {
+      continuousEmissionContainer.classList.add('hidden');
+      burstEmissionContainer.classList.remove('hidden');
+    } else {
+      continuousEmissionContainer.classList.remove('hidden');
+      burstEmissionContainer.classList.add('hidden');
+    }
+  });
+  
+  // Initialize UI based on initial burst mode state
+  burstCheckbox.checked = burstMode;
+  if (burstMode) {
+    continuousEmissionContainer.classList.add('hidden');
+    burstEmissionContainer.classList.remove('hidden');
+  } else {
+    continuousEmissionContainer.classList.remove('hidden');
+    burstEmissionContainer.classList.add('hidden');
+  }
   
   // Create shader and pipeline based on current settings
   function createShaderAndPipeline() {
@@ -435,53 +486,79 @@ async function main() {
   
   // Spawn particles
   function spawnParticles() {
+    // Reset counters
     activeParticles = 0;
+    currentEmissionTime = 0;
+    emissionTimer = 0;
     
-    const baseLifetime = parseFloat(lifetimeSlider.value);
-    
-    for (let i = 0; i < particleCount; i++) {
-      const index = i * 8;
+    if (burstMode) {
+      // Burst mode: emit all particles at once
+      const burstCount = particleCount;
       
-      // Generate random position near origin
-      const posX = (Math.random() - 0.5) * 2;
-      const posY = (Math.random() - 0.5) * 2;
-      const posZ = (Math.random() - 0.5) * 2;
-      
-      // Normalize to get direction vector from origin
-      const length = Math.sqrt(posX * posX + posY * posY + posZ * posZ) || 0.0001; // Avoid division by zero
-      const dirX = posX / length;
-      const dirY = posY / length;
-      const dirZ = posZ / length;
-      
-      // Set position
-      particleData[index] = posX;
-      particleData[index + 1] = posY;
-      particleData[index + 2] = posZ;
-      
-      // Store velocity vector for this particle (scaled by speed)
-      const velIndex = i * 3;
-      particleVelocities[velIndex] = dirX * particleSpeed;
-      particleVelocities[velIndex + 1] = dirY * particleSpeed;
-      particleVelocities[velIndex + 2] = dirZ * particleSpeed;
-      
-      // Color
-      if (colorTransitionEnabled) {
-        particleData[index + 3] = startColor[0];
-        particleData[index + 4] = startColor[1];
-        particleData[index + 5] = startColor[2];
-      } else {
-        particleData[index + 3] = particleColor[0];
-        particleData[index + 4] = particleColor[1];
-        particleData[index + 5] = particleColor[2];
+      // Emit all particles immediately
+      for (let i = 0; i < burstCount; i++) {
+        emitParticle();
       }
       
-      // Age and lifetime
-      particleData[index + 6] = 0;
-      particleData[index + 7] = baseLifetime + Math.random() * 2 - 1;
+      // No need to continue emitting
+      emitting = false;
+    } else {
+      // Continuous emission mode
+      emitting = true;
+      
+      // Calculate max particles based on emission rate and duration
+      const baseLifetime = parseFloat(lifetimeSlider.value);
+      const effectiveDuration = Math.min(emissionDuration, baseLifetime);
+      particleCount = Math.min(Math.ceil(emissionRate * effectiveDuration), MAX_PARTICLES);
+    }
+  }
+  
+  // Emit a single particle
+  function emitParticle() {
+    if (activeParticles >= particleCount) return false;
+    
+    const index = activeParticles * 8;
+    
+    // Generate random position near origin
+    const posX = (Math.random() - 0.5) * 2;
+    const posY = (Math.random() - 0.5) * 2;
+    const posZ = (Math.random() - 0.5) * 2;
+    
+    // Normalize to get direction vector from origin
+    const length = Math.sqrt(posX * posX + posY * posY + posZ * posZ) || 0.0001; // Avoid division by zero
+    const dirX = posX / length;
+    const dirY = posY / length;
+    const dirZ = posZ / length;
+    
+    // Set position
+    particleData[index] = posX;
+    particleData[index + 1] = posY;
+    particleData[index + 2] = posZ;
+    
+    // Store velocity vector for this particle (scaled by speed)
+    const velIndex = activeParticles * 3;
+    particleVelocities[velIndex] = dirX * particleSpeed;
+    particleVelocities[velIndex + 1] = dirY * particleSpeed;
+    particleVelocities[velIndex + 2] = dirZ * particleSpeed;
+    
+    // Color
+    if (colorTransitionEnabled) {
+      particleData[index + 3] = startColor[0];
+      particleData[index + 4] = startColor[1];
+      particleData[index + 5] = startColor[2];
+    } else {
+      particleData[index + 3] = particleColor[0];
+      particleData[index + 4] = particleColor[1];
+      particleData[index + 5] = particleColor[2];
     }
     
-    activeParticles = particleCount;
-    device.queue.writeBuffer(instanceBuffer, 0, particleData, 0, activeParticles * 8 * 4);
+    // Age and lifetime - set a lifetime from the slider
+    const baseLifetime = parseFloat(lifetimeSlider.value);
+    particleData[index + 6] = 0; // Age starts at 0
+    particleData[index + 7] = baseLifetime + Math.random() * 2 - 1; // Add a small random variance
+    
+    activeParticles++;
+    return true;
   }
   
   // Update particles
@@ -604,6 +681,34 @@ async function main() {
     const deltaTime = (currentTime - lastTime) / 1000;
     lastTime = currentTime;
     
+    // Handle particle emission
+    if (emitting) {
+      // Update emission timer
+      currentEmissionTime += deltaTime;
+      emissionTimer += deltaTime;
+      
+      // Check if we're still within emission duration
+      if (currentEmissionTime < emissionDuration) {
+        // Calculate how many particles to emit this frame
+        const particlesToEmit = emissionRate * deltaTime;
+        let wholeParticlesToEmit = Math.floor(particlesToEmit);
+        const fractionalPart = particlesToEmit - wholeParticlesToEmit;
+        
+        // Handle fractional particles (probabilistic emission)
+        if (Math.random() < fractionalPart) {
+          wholeParticlesToEmit += 1;
+        }
+        
+        // Emit particles
+        for (let i = 0; i < wholeParticlesToEmit; i++) {
+          emitParticle();
+        }
+      } else if (emitting) {
+        // Stop emitting once duration is reached
+        emitting = false;
+      }
+    }
+    
     // Update particle positions and ages
     let needsUpdate = false;
     for (let i = 0; i < activeParticles; i++) {
@@ -611,7 +716,6 @@ async function main() {
       particleData[i * 8 + 6] += deltaTime;
       
       // Update position based on velocity and deltaTime
-      // Apply velocity regardless of particle age - keep moving until removed
       const velIndex = i * 3;
       const posIndex = i * 8;
       
@@ -620,12 +724,10 @@ async function main() {
       particleData[posIndex + 1] += particleVelocities[velIndex + 1] * deltaTime;
       particleData[posIndex + 2] += particleVelocities[velIndex + 2] * deltaTime;
       
-      // Need to update buffer every frame when particles are moving
       needsUpdate = true;
     }
     
     if (needsUpdate) {
-      // This will only remove dead particles after they've moved
       updateBuffers();
     }
     

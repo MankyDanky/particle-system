@@ -36,7 +36,8 @@
       display: flex;
       align-items: center;
     }
-    .color-container.hidden {
+    .color-container.hidden,
+    .hidden {
       display: none;
     }
     label {
@@ -66,16 +67,37 @@
   <div class="controls">
     <button id="respawn-button">Respawn Particles</button>
     
+    <div class="checkbox-container">
+      <input type="checkbox" id="burst-checkbox">
+      <label for="burst-checkbox">Burst Mode (Instant Emission)</label>
+    </div>
+    
+    <div id="continuous-emission-container">
+      <div class="slider-container">
+        <label for="emission-duration-slider">Emission Duration:</label>
+        <input type="range" id="emission-duration-slider" min="1" max="30" value="10" step="1">
+        <span id="emission-duration-value">10 sec</span>
+      </div>
+      
+      <div class="slider-container">
+        <label for="emission-rate-slider">Emission Rate:</label>
+        <input type="range" id="emission-rate-slider" min="1" max="100" value="10" step="1">
+        <span id="emission-rate-value">10 particles/sec</span>
+      </div>
+    </div>
+    
+    <div id="burst-emission-container" class="hidden">
+      <div class="slider-container">
+        <label for="particle-count-slider">Particle Count:</label>
+        <input type="range" id="particle-count-slider" min="10" max="1000" value="100" step="10">
+        <span id="particle-count-value">100</span>
+      </div>
+    </div>
+    
     <div class="slider-container">
       <label for="lifetime-slider">Particle Lifetime:</label>
       <input type="range" id="lifetime-slider" min="1" max="20" value="5" step="0.5">
       <span id="lifetime-value">5 sec</span>
-    </div>
-    
-    <div class="slider-container">
-      <label for="count-slider">Particle Count:</label>
-      <input type="range" id="count-slider" min="10" max="2000" value="50" step="10">
-      <span id="count-value">50</span>
     </div>
     
     <div class="slider-container">
