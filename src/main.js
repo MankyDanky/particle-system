@@ -5,7 +5,9 @@ async function initWebGPU() {
       throw new Error("WebGPU not supported on this browser.");
   }
 
+  // In your initWebGPU function, make sure the canvas is properly sized
   const canvas = document.getElementById('webgpu-canvas');
+
   const context = canvas.getContext('webgpu');
 
   const adapter = await navigator.gpu.requestAdapter();
@@ -62,44 +64,31 @@ async function main() {
     }
   });
   
-  // Define cube vertices (position and color)
+  // First, let's modify the vertex definition to create a simple quad instead of a cube
+  
+  // Define quad vertices (position and color)
   const vertices = new Float32Array([
-    // Front face
-    -0.5, -0.5,  0.5, 1.0, 0.0, 0.0, // bottom-left, red
-     0.5, -0.5,  0.5, 0.0, 1.0, 0.0, // bottom-right, green
-     0.5,  0.5,  0.5, 0.0, 0.0, 1.0, // top-right, blue
-    -0.5,  0.5,  0.5, 1.0, 1.0, 0.0, // top-left, yellow
-    // Back face
-    -0.5, -0.5, -0.5, 1.0, 0.0, 1.0, // bottom-left, magenta
-     0.5, -0.5, -0.5, 0.0, 1.0, 1.0, // bottom-right, cyan
-     0.5,  0.5, -0.5, 1.0, 1.0, 1.0, // top-right, white
-    -0.5,  0.5, -0.5, 0.5, 0.5, 0.5, // top-left, gray
+    // Single quad with position and color
+    -0.5, -0.5, 0.0,  1.0, 0.0, 0.0, // bottom-left, red
+     0.5, -0.5, 0.0,  0.0, 1.0, 0.0, // bottom-right, green
+     0.5,  0.5, 0.0,  0.0, 0.0, 1.0, // top-right, blue
+    -0.5,  0.5, 0.0,  1.0, 1.0, 0.0, // top-left, yellow
   ]);
 
-  // Define indices for the cube faces
+  // Define indices for the quad (2 triangles)
   const indices = new Uint16Array([
-    // front
-    0, 1, 2, 2, 3, 0,
-    // right
-    1, 5, 6, 6, 2, 1,
-    // back
-    5, 4, 7, 7, 6, 5,
-    // left
-    4, 0, 3, 3, 7, 4,
-    // top
-    3, 2, 6, 6, 7, 3,
-    // bottom
-    4, 5, 1, 1, 0, 4
+    0, 1, 2,  // first triangle
+    2, 3, 0   // second triangle
   ]);
 
-  // Create vertex buffer
+  // Create vertex buffer (same as before)
   const vertexBuffer = device.createBuffer({
     size: vertices.byteLength,
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
   });
   device.queue.writeBuffer(vertexBuffer, 0, vertices);
 
-  // Create index buffer
+  // Create index buffer (same as before)
   const indexBuffer = device.createBuffer({
     size: indices.byteLength,
     usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
@@ -191,7 +180,7 @@ async function main() {
     },
     primitive: {
       topology: 'triangle-list',
-      cullMode: 'back',
+      cullMode: 'none',  // Change to 'none' to see both sides of the quad
     },
     depthStencil: {
       depthWriteEnabled: true,
@@ -234,6 +223,7 @@ async function main() {
 
   // Animation loop
   function frame() {
+    console.log("Rendering frame");
     // Simple model-view-projection matrix
     const aspect = canvas.width / canvas.height;
     const projectionMatrix = createProjectionMatrix(aspect);
@@ -246,34 +236,31 @@ async function main() {
     const cameraY = cameraDistance * Math.sin(cameraRotationX);
     const cameraZ = cameraDistance * Math.cos(cameraRotationY) * Math.cos(cameraRotationX);
     
+    // Camera position vector
+    const cameraPos = [cameraX, cameraY, cameraZ];
+    
     // Create a look-at view matrix
     const viewMatrix = createLookAtMatrix(
-      [cameraX, cameraY, cameraZ], // camera position
-      [0, 0, 0],                   // target (looking at origin)
-      [0, 1, 0]                    // up vector
+      cameraPos,                // camera position
+      [0, 0, 0],                // target (looking at origin)
+      [0, 1, 0]                 // up vector
     );
     
-    // Create a simple identity model matrix (no rotation needed as the camera orbits)
-    const modelMatrix = new Float32Array([
-      1, 0, 0, 0,
-      0, 1, 0, 0,
-      0, 0, 1, 0,
-      0, 0, 0, 1
-    ]);
+    // Create billboard matrix - this will make the quad face the camera
+    const billboardMatrix = createBillboardMatrix(cameraPos);
     
-    // Multiply model and view matrices
-    const mvMatrix = multiplyMatrices(viewMatrix, modelMatrix);
+    // Multiply billboard with view matrix
+    const mvMatrix = multiplyMatrices(viewMatrix, billboardMatrix);
     
     // Multiply with projection matrix
     const mvpMatrix = multiplyMatrices(projectionMatrix, mvMatrix);
     
     // Write the transformation matrix to the uniform buffer
     device.queue.writeBuffer(uniformBuffer, 0, mvpMatrix);
-
-    // The rest of the render code remains the same
+    
+    // Rest of rendering code...
     const commandEncoder = device.createCommandEncoder();
     
-    // Begin render pass
     const renderPassDescriptor = {
       colorAttachments: [{
         view: context.getCurrentTexture().createView(),
@@ -294,7 +281,7 @@ async function main() {
     passEncoder.setBindGroup(0, bindGroup);
     passEncoder.setVertexBuffer(0, vertexBuffer);
     passEncoder.setIndexBuffer(indexBuffer, 'uint16');
-    passEncoder.drawIndexed(36);
+    passEncoder.drawIndexed(6); // Drawing 6 indices (2 triangles) instead of 36
     passEncoder.end();
     device.queue.submit([commandEncoder.finish()]);
     
@@ -357,6 +344,33 @@ async function main() {
     return result;
   }
   
+  // Helper function to create a billboard matrix (always faces camera)
+  function createBillboardMatrix(cameraPos) {
+    // Calculate the direction from the billboard to the camera
+    const direction = normalizeVector([
+      cameraPos[0], 
+      cameraPos[1], 
+      cameraPos[2]
+    ]);
+    
+    // Use the world up vector
+    const worldUp = [0, 1, 0];
+    
+    // Calculate right vector (perpendicular to direction and worldUp)
+    const right = normalizeVector(crossProduct(worldUp, direction));
+    
+    // Calculate the corrected up vector
+    const up = crossProduct(direction, right);
+    
+    // Create a rotation matrix that makes the quad face the camera
+    return new Float32Array([
+      right[0], right[1], right[2], 0,
+      up[0], up[1], up[2], 0,
+      direction[0], direction[1], direction[2], 0,
+      0, 0, 0, 1
+    ]);
+  }
+
   // Start the animation loop
   requestAnimationFrame(frame);
 }
