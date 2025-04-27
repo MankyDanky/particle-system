@@ -73,6 +73,7 @@ async function main() {
     [0, -2, 0],     // Bottom
     [0, 0, 2],      // Front
     [0, 0, -2]      // Back
+    
   ];
   
   // Define billboard size (add this near your billboard positions)
@@ -414,10 +415,10 @@ function createBillboards(positions) {
   
   positions.forEach((pos, billboardIndex) => {
     const colors = [
-      [1.0, 0.0, 0.0], // red
-      [0.0, 1.0, 0.0], // green
-      [0.0, 0.0, 1.0], // blue
-      [1.0, 1.0, 0.0]  // yellow
+      [1.0, 1.0, 1.0],
+      [1.0, 1.0, 1.0],
+      [1.0, 1.0, 1.0],
+      [1.0, 1.0, 1.0] 
     ];
     
     const corners = [
