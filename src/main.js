@@ -83,6 +83,8 @@ async function main() {
   const countValue = document.getElementById('count-value');
   const sizeSlider = document.getElementById('size-slider');
   const sizeValue = document.getElementById('size-value');
+  const speedSlider = document.getElementById('speed-slider');
+  const speedValue = document.getElementById('speed-value');
   const fadeCheckbox = document.getElementById('fade-checkbox');
   const colorTransitionCheckbox = document.getElementById('color-transition-checkbox');
   const singleColorContainer = document.getElementById('single-color-container');
@@ -95,6 +97,10 @@ async function main() {
   let fadeEnabled = fadeCheckbox.checked;
   let colorTransitionEnabled = colorTransitionCheckbox.checked;
   let particleSize = parseFloat(sizeSlider.value);
+  let particleSpeed = parseFloat(speedSlider.value);
+  
+  // Velocity array to store direction vectors for each particle
+  const particleVelocities = new Float32Array(MAX_PARTICLES * 3); // x, y, z velocities
   
   // Convert hex color to RGB [0-1]
   function hexToRgb(hex) {
@@ -178,6 +184,16 @@ async function main() {
     
     // Recreate shader and pipeline to apply new size
     createShaderAndPipeline();
+  });
+  
+  // Update speed value display when slider changes
+  speedSlider.addEventListener('input', () => {
+    const value = speedSlider.value;
+    speedValue.textContent = value;
+    particleSpeed = parseFloat(value);
+    
+    // No need to recreate shader, just update velocity for existing particles
+    updateParticleVelocities();
   });
   
   // Create shader and pipeline based on current settings
@@ -426,10 +442,27 @@ async function main() {
     for (let i = 0; i < particleCount; i++) {
       const index = i * 8;
       
-      // Position
-      particleData[index] = (Math.random() - 0.5) * 10;
-      particleData[index + 1] = (Math.random() - 0.5) * 10;
-      particleData[index + 2] = (Math.random() - 0.5) * 10;
+      // Generate random position near origin
+      const posX = (Math.random() - 0.5) * 2;
+      const posY = (Math.random() - 0.5) * 2;
+      const posZ = (Math.random() - 0.5) * 2;
+      
+      // Normalize to get direction vector from origin
+      const length = Math.sqrt(posX * posX + posY * posY + posZ * posZ) || 0.0001; // Avoid division by zero
+      const dirX = posX / length;
+      const dirY = posY / length;
+      const dirZ = posZ / length;
+      
+      // Set position
+      particleData[index] = posX;
+      particleData[index + 1] = posY;
+      particleData[index + 2] = posZ;
+      
+      // Store velocity vector for this particle (scaled by speed)
+      const velIndex = i * 3;
+      particleVelocities[velIndex] = dirX * particleSpeed;
+      particleVelocities[velIndex + 1] = dirY * particleSpeed;
+      particleVelocities[velIndex + 2] = dirZ * particleSpeed;
       
       // Color
       if (colorTransitionEnabled) {
@@ -461,8 +494,14 @@ async function main() {
       if (age >= lifetime) continue;
       
       if (newActiveCount !== i) {
+        // Copy particle data
         for (let j = 0; j < 8; j++) {
           particleData[newActiveCount * 8 + j] = particleData[i * 8 + j];
+        }
+        
+        // Also copy the velocity data to keep arrays in sync
+        for (let j = 0; j < 3; j++) {
+          particleVelocities[newActiveCount * 3 + j] = particleVelocities[i * 3 + j];
         }
       }
       newActiveCount++;
@@ -492,6 +531,30 @@ async function main() {
     // Update the buffer with the new colors
     if (activeParticles > 0) {
       device.queue.writeBuffer(instanceBuffer, 0, particleData, 0, activeParticles * 8 * 4);
+    }
+  }
+  
+  // Function to update velocity of existing particles
+  function updateParticleVelocities() {
+    for (let i = 0; i < activeParticles; i++) {
+      const index = i * 8; // Position data index
+      const velIndex = i * 3; // Velocity data index
+      
+      // Get the current position
+      const posX = particleData[index];
+      const posY = particleData[index + 1];
+      const posZ = particleData[index + 2];
+      
+      // Calculate direction away from origin (normalize the position vector)
+      const length = Math.sqrt(posX * posX + posY * posY + posZ * posZ) || 0.0001; // Avoid division by zero
+      const dirX = posX / length;
+      const dirY = posY / length;
+      const dirZ = posZ / length;
+      
+      // Update velocity in the direction away from origin based on current speed setting
+      particleVelocities[velIndex] = dirX * particleSpeed;
+      particleVelocities[velIndex + 1] = dirY * particleSpeed;
+      particleVelocities[velIndex + 2] = dirZ * particleSpeed;
     }
   }
 
@@ -541,16 +604,28 @@ async function main() {
     const deltaTime = (currentTime - lastTime) / 1000;
     lastTime = currentTime;
     
-    // Update particle ages
+    // Update particle positions and ages
     let needsUpdate = false;
     for (let i = 0; i < activeParticles; i++) {
+      // Update age
       particleData[i * 8 + 6] += deltaTime;
-      if (particleData[i * 8 + 6] % 0.1 < deltaTime) {
-        needsUpdate = true;
-      }
+      
+      // Update position based on velocity and deltaTime
+      // Apply velocity regardless of particle age - keep moving until removed
+      const velIndex = i * 3;
+      const posIndex = i * 8;
+      
+      // Apply velocity to position
+      particleData[posIndex] += particleVelocities[velIndex] * deltaTime;
+      particleData[posIndex + 1] += particleVelocities[velIndex + 1] * deltaTime;
+      particleData[posIndex + 2] += particleVelocities[velIndex + 2] * deltaTime;
+      
+      // Need to update buffer every frame when particles are moving
+      needsUpdate = true;
     }
     
     if (needsUpdate) {
+      // This will only remove dead particles after they've moved
       updateBuffers();
     }
     
