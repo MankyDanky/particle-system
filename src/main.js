@@ -81,6 +81,8 @@ async function main() {
   const lifetimeValue = document.getElementById('lifetime-value');
   const countSlider = document.getElementById('count-slider');
   const countValue = document.getElementById('count-value');
+  const sizeSlider = document.getElementById('size-slider');
+  const sizeValue = document.getElementById('size-value');
   const fadeCheckbox = document.getElementById('fade-checkbox');
   const colorTransitionCheckbox = document.getElementById('color-transition-checkbox');
   const singleColorContainer = document.getElementById('single-color-container');
@@ -92,6 +94,7 @@ async function main() {
   // Settings state
   let fadeEnabled = fadeCheckbox.checked;
   let colorTransitionEnabled = colorTransitionCheckbox.checked;
+  let particleSize = parseFloat(sizeSlider.value);
   
   // Convert hex color to RGB [0-1]
   function hexToRgb(hex) {
@@ -154,6 +157,19 @@ async function main() {
     spawnParticles();
   });
   
+  // Update size value display when slider changes
+  sizeSlider.addEventListener('input', () => {
+    const value = sizeSlider.value;
+    sizeValue.textContent = value;
+    particleSize = parseFloat(value);
+    
+    // Recreate the quad geometry with new size
+    updateQuadGeometry(particleSize);
+    
+    // Recreate shader and pipeline to apply new size
+    createShaderAndPipeline();
+  });
+  
   // Create shader and pipeline based on current settings
   function createShaderAndPipeline() {
     const shaderModule = device.createShaderModule({
@@ -212,9 +228,9 @@ async function main() {
           // Transform to view space
           let viewCenter = uniforms.transform * vec4<f32>(center, 1.0);
           
-          // Distance-based size scaling
+          // Distance-based size scaling with particle size factor
           let cameraToParticle = length(center - uniforms.cameraPosition);
-          let baseScaleFactor = 0.15;
+          let baseScaleFactor = 0.15 * ${particleSize}; // Apply the slider value here
           let distanceScaleFactor = baseScaleFactor * (10.0 / cameraToParticle);
           
           // Apply billboard technique
@@ -615,6 +631,20 @@ async function main() {
     }
     
     return result;
+  }
+
+  // Update quad geometry with new size
+  function updateQuadGeometry(size) {
+    // Create new vertices with the updated size
+    const newQuadVertices = new Float32Array([
+      -size, -size, 0,
+      size, -size, 0,
+      size, size, 0,
+      -size, size, 0
+    ]);
+    
+    // Update the vertex buffer with new sized vertices
+    device.queue.writeBuffer(quadVertexBuffer, 0, newQuadVertices);
   }
 
   // Initialize particles and start animation
