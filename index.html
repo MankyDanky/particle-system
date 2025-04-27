@@ -25,9 +25,19 @@
       padding: 10px;
       border-radius: 5px;
       z-index: 10;
+      max-height: 90vh;
+      overflow-y: auto;
     }
     .slider-container {
       margin: 10px 0;
+    }
+    .color-container {
+      margin: 10px 0;
+      display: flex;
+      align-items: center;
+    }
+    .color-container.hidden {
+      display: none;
     }
     label {
       display: inline-block;
@@ -40,6 +50,13 @@
     }
     .checkbox-container input {
       margin-right: 10px;
+    }
+    .color-input {
+      width: 60px;
+      height: 30px;
+      margin-right: 10px;
+      border: none;
+      cursor: pointer;
     }
   </style>
 </head>
@@ -64,6 +81,24 @@
     <div class="checkbox-container">
       <input type="checkbox" id="fade-checkbox" checked>
       <label for="fade-checkbox">Fade Out Over Lifetime</label>
+    </div>
+    
+    <div class="checkbox-container">
+      <input type="checkbox" id="color-transition-checkbox">
+      <label for="color-transition-checkbox">Color Over Lifetime</label>
+    </div>
+    
+    <div class="color-container" id="single-color-container">
+      <label for="particle-color">Particle Color:</label>
+      <input type="color" id="particle-color" class="color-input" value="#ff4500">
+    </div>
+    
+    <div class="color-container hidden" id="gradient-color-container">
+      <label for="start-color">Start Color:</label>
+      <input type="color" id="start-color" class="color-input" value="#ff4500">
+      
+      <label for="end-color" style="width: auto; margin-left: 10px;">End Color:</label>
+      <input type="color" id="end-color" class="color-input" value="#0066ff">
     </div>
   </div>
   

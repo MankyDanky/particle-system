@@ -91,10 +91,30 @@ async function main() {
   const countSlider = document.getElementById('count-slider');
   const countValue = document.getElementById('count-value');
   const fadeCheckbox = document.getElementById('fade-checkbox');
+  const colorTransitionCheckbox = document.getElementById('color-transition-checkbox');
+  const singleColorContainer = document.getElementById('single-color-container');
+  const gradientColorContainer = document.getElementById('gradient-color-container');
+  const particleColorInput = document.getElementById('particle-color');
+  const startColorInput = document.getElementById('start-color');
+  const endColorInput = document.getElementById('end-color');
   
-  // Add state to track fade setting
+  // Add state to track settings
   let fadeEnabled = fadeCheckbox.checked;
+  let colorTransitionEnabled = colorTransitionCheckbox.checked;
   
+  // Helper function to convert hex color to RGB [0-1]
+  function hexToRgb(hex) {
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
+    return [r, g, b];
+  }
+  
+  // Initialize colors from the input elements
+  let particleColor = hexToRgb(particleColorInput.value);
+  let startColor = hexToRgb(startColorInput.value);
+  let endColor = hexToRgb(endColorInput.value);
+
   // Update lifetime value display when slider changes
   lifetimeSlider.addEventListener('input', () => {
     const value = lifetimeSlider.value;
@@ -119,9 +139,45 @@ async function main() {
     updateBuffers();
   });
   
-  // Function to create shader and pipeline (so we can recreate them when fade setting changes)
+  // Color transition checkbox event listener
+  colorTransitionCheckbox.addEventListener('change', () => {
+    colorTransitionEnabled = colorTransitionCheckbox.checked;
+    
+    // Show/hide appropriate color inputs
+    if (colorTransitionEnabled) {
+      singleColorContainer.classList.add('hidden');
+      gradientColorContainer.classList.remove('hidden');
+    } else {
+      singleColorContainer.classList.remove('hidden');
+      gradientColorContainer.classList.add('hidden');
+    }
+    
+    // Recreate shader and pipeline to apply new color transition setting
+    createShaderAndPipeline();
+    
+    // Update buffers to see the change immediately
+    updateBuffers();
+  });
+  
+  // Color input event listeners
+  particleColorInput.addEventListener('input', () => {
+    particleColor = hexToRgb(particleColorInput.value);
+    spawnParticles();
+  });
+  
+  startColorInput.addEventListener('input', () => {
+    startColor = hexToRgb(startColorInput.value);
+    spawnParticles();
+  });
+  
+  endColorInput.addEventListener('input', () => {
+    endColor = hexToRgb(endColorInput.value);
+    spawnParticles();
+  });
+  
+  // Function to create shader and pipeline (so we can recreate them when settings change)
   function createShaderAndPipeline() {
-    // Update the shader module with current fade setting
+    // Update the shader module with current settings
     const shaderModule = device.createShaderModule({
       code: `
         struct Uniforms {
@@ -154,14 +210,32 @@ async function main() {
           
           // Extract instance data
           let center = input.particlePosition;
+          let baseColor = input.particleColor;
           let age = input.particleAgeAndLife.x;
           let lifetime = input.particleAgeAndLife.y;
+          let lifeRatio = age / lifetime;
+          
+          // Calculate color based on settings
+          var finalColor = baseColor;
+          
+          // Add color transition if enabled
+          if (${colorTransitionEnabled ? "true" : "false"}) {
+            // Color constants (injected from JavaScript)
+            let startColor = vec3<f32>(${startColor[0]}, ${startColor[1]}, ${startColor[2]});
+            let endColor = vec3<f32>(${endColor[0]}, ${endColor[1]}, ${endColor[2]});
+            
+            // Interpolate between start and end color based on lifetime
+            finalColor = mix(startColor, endColor, lifeRatio);
+          } else {
+            // Use the single color value when transition is disabled
+            let singleColor = vec3<f32>(${particleColor[0]}, ${particleColor[1]}, ${particleColor[2]});
+            finalColor = singleColor;
+          }
           
           // Calculate alpha based on lifetime
           var alpha = 0.0;
           if (${fadeEnabled ? "true" : "false"}) {
             // Fade out over lifetime when enabled
-            let lifeRatio = age / lifetime;
             alpha = max(0.0, 1.0 - lifeRatio);
           } else {
             // Constant opacity when disabled (except for expired particles)
@@ -181,14 +255,14 @@ async function main() {
           // Apply the vertex offset based on the quad position (billboard technique)
           // This creates a quad that faces the camera
           let finalPosition = vec4<f32>(
-            viewCenter.x + input.position.x * distanceScaleFactor * viewCenter.w,
+            viewCenter.x + input.position.x * distanceScaleFactor * uniforms.aspectRatio * viewCenter.w,
             viewCenter.y + input.position.y * distanceScaleFactor * viewCenter.w,
             viewCenter.z,
             viewCenter.w
           );
           
           output.position = finalPosition;
-          output.color = input.particleColor;
+          output.color = finalColor;
           output.alpha = alpha;
           return output;
         }
@@ -402,10 +476,19 @@ async function main() {
       particleData[index + 1] = (Math.random() - 0.5) * 10; // y
       particleData[index + 2] = (Math.random() - 0.5) * 10; // z
       
-      // Color (random)
-      particleData[index + 3] = Math.random(); // r
-      particleData[index + 4] = Math.random(); // g
-      particleData[index + 5] = Math.random(); // b
+      // Color - based on the current color settings
+      if (colorTransitionEnabled) {
+        // Use either random colors or the start color when transitioning
+        // We'll let the shader handle the transition to the end color
+        particleData[index + 3] = startColor[0]; // r
+        particleData[index + 4] = startColor[1]; // g
+        particleData[index + 5] = startColor[2]; // b
+      } else {
+        // Use the single color when not transitioning
+        particleData[index + 3] = particleColor[0]; // r
+        particleData[index + 4] = particleColor[1]; // g
+        particleData[index + 5] = particleColor[2]; // b
+      }
       
       // Age and lifetime
       particleData[index + 6] = 0; // age
