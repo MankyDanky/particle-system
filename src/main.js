@@ -261,8 +261,8 @@ async function main() {
         // Add the offset directly to the clip space position
         let aspectCorrection = uniforms.aspectRatio;
         let finalPosition = vec4<f32>(
-          viewCenter.x + localOffset.x * distanceScaleFactor * viewCenter.w,
-          viewCenter.y + localOffset.y * distanceScaleFactor * aspectCorrection * viewCenter.w,
+          viewCenter.x + localOffset.x * distanceScaleFactor * aspectCorrection * viewCenter.w,
+          viewCenter.y + localOffset.y * distanceScaleFactor * viewCenter.w,
           viewCenter.z,
           viewCenter.w
         );
@@ -373,7 +373,7 @@ async function main() {
     const f = 1.0 / Math.tan(fov / 2);
     
     return new Float32Array([
-      f / aspect, 0, 0, 0,
+      f * aspect, 0, 0, 0,
       0, f, 0, 0,
       0, 0, (far + near) / (near - far), -1,
       0, 0, (2 * far * near) / (near - far), 0,
@@ -401,7 +401,7 @@ async function main() {
       updateBuffers();
     }
     
-    const aspect = canvas.width / canvas.height;
+    const aspect = canvas.height / canvas.width;
     const projectionMatrix = createProjectionMatrix(aspect);
     
     // Calculate camera position based on spherical coordinates
