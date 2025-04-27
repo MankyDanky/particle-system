@@ -34,6 +34,8 @@ async function main() {
   let lastMouseX = 0;
   let lastMouseY = 0;
   const rotationSpeed = 0.01;
+  
+  // Add zoom control variables
   let cameraDistance = 10.0; // Initial camera distance
   const minZoom = 3.0;       // Minimum zoom distance
   const maxZoom = 20.0;      // Maximum zoom distance
@@ -42,28 +44,31 @@ async function main() {
   // Define the size of each billboard
   const size = 0.5;
   
-  // Add particle system state
-  const particleCount = 50; // Fixed number of particles
+  // Add particle system state - make particleCount variable instead of constant
+  let particleCount = 50; // Initial particle count, now variable
   let particles = [];
   let lastTime = performance.now();
   
   // Get canvas reference
   const canvas = document.getElementById('webgpu-canvas');
   
-  // Create depth texture first
+  // Set canvas size to match window size
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  
+  // Create depth texture first (before any function tries to use it)
   let depthTexture = device.createTexture({
     size: [canvas.width, canvas.height],
     format: 'depth24plus',
     usage: GPUTextureUsage.RENDER_ATTACHMENT,
   });
   
-  // Now define resize function after depthTexture is created
+  // Function to resize canvas and resources
   function resizeCanvasToDisplaySize() {
-    // Set the canvas size to match the window size
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     
-    // Since depthTexture is already defined, we can safely access it
+    // Recreate depth texture with new size
     depthTexture.destroy();
     depthTexture = device.createTexture({
       size: [canvas.width, canvas.height],
@@ -72,24 +77,28 @@ async function main() {
     });
   }
   
-  // Call resize function initially
-  resizeCanvasToDisplaySize();
+  // Add resize event listener
+  window.addEventListener('resize', resizeCanvasToDisplaySize);
   
-  // Add a resize event listener
-  window.addEventListener('resize', () => {
-    resizeCanvasToDisplaySize();
-  });
-  
-  // Get lifetime slider elements
+  // Get UI elements
   const lifetimeSlider = document.getElementById('lifetime-slider');
   const lifetimeValue = document.getElementById('lifetime-value');
+  const countSlider = document.getElementById('count-slider');
+  const countValue = document.getElementById('count-value');
   
-  // Update the lifetime value display when slider changes
+  // Update lifetime value display when slider changes
   lifetimeSlider.addEventListener('input', () => {
     const value = lifetimeSlider.value;
     lifetimeValue.textContent = `${value} sec`;
   });
   
+  // Update count value display when slider changes
+  countSlider.addEventListener('input', () => {
+    const value = countSlider.value;
+    countValue.textContent = value;
+    particleCount = parseInt(value);
+  });
+
   // Create respawn button listener
   const respawnButton = document.getElementById('respawn-button');
   respawnButton.addEventListener('click', () => {
@@ -137,19 +146,18 @@ async function main() {
     console.log(`Camera distance: ${cameraDistance.toFixed(2)}`);
   });
   
-  // Set up buffers with max capacity
-  const maxVertexBufferSize = particleCount * 4 * 10 * 4; // particleCount * 4 vertices * 10 floats * 4 bytes
-  const maxIndexBufferSize = particleCount * 6 * 2; // particleCount * 6 indices * 2 bytes
+  // Set up buffers with max capacity - define MAX_PARTICLES as a constant for the upper limit
+  const MAX_PARTICLES = 1000; // Maximum possible particles (matches slider max)
   
-  // Create vertex buffer
+  // Create vertex buffer with capacity for maximum particles
   const vertexBuffer = device.createBuffer({
-    size: maxVertexBufferSize,
+    size: MAX_PARTICLES * 4 * 10 * 4, // MAX_PARTICLES * 4 vertices per quad * 10 floats per vertex * 4 bytes per float
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
   });
   
-  // Create index buffer
+  // Create index buffer with capacity for maximum particles
   const indexBuffer = device.createBuffer({
-    size: maxIndexBufferSize,
+    size: MAX_PARTICLES * 6 * 2, // MAX_PARTICLES * 6 indices per quad (2 triangles) * 2 bytes per index (uint16)
     usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
   });
   
