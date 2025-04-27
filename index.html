@@ -33,6 +33,14 @@
       display: inline-block;
       width: 150px;
     }
+    .checkbox-container {
+      margin: 10px 0;
+      display: flex;
+      align-items: center;
+    }
+    .checkbox-container input {
+      margin-right: 10px;
+    }
   </style>
 </head>
 <body>
@@ -51,6 +59,11 @@
       <label for="count-slider">Particle Count:</label>
       <input type="range" id="count-slider" min="10" max="1000" value="50" step="10">
       <span id="count-value">50</span>
+    </div>
+    
+    <div class="checkbox-container">
+      <input type="checkbox" id="fade-checkbox" checked>
+      <label for="fade-checkbox">Fade Out Over Lifetime</label>
     </div>
   </div>
   

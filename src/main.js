@@ -85,6 +85,10 @@ async function main() {
   const lifetimeValue = document.getElementById('lifetime-value');
   const countSlider = document.getElementById('count-slider');
   const countValue = document.getElementById('count-value');
+  const fadeCheckbox = document.getElementById('fade-checkbox');
+  
+  // Add state to track fade setting
+  let fadeEnabled = fadeCheckbox.checked;
   
   // Update lifetime value display when slider changes
   lifetimeSlider.addEventListener('input', () => {
@@ -97,6 +101,13 @@ async function main() {
     const value = countSlider.value;
     countValue.textContent = value;
     particleCount = parseInt(value);
+  });
+  
+  // Toggle fade effect when checkbox changes
+  fadeCheckbox.addEventListener('change', () => {
+    fadeEnabled = fadeCheckbox.checked;
+    // Update particles immediately so the effect is visible
+    updateBuffers();
   });
 
   // Create respawn button listener
@@ -530,9 +541,16 @@ async function main() {
     particles.forEach((particle, particleIndex) => {
       const pos = particle.position;
       
-      // Calculate alpha based on age (fade out as it gets older)
-      const lifeRatio = particle.age / particle.lifetime;
-      const alpha = Math.max(0, 1.0 - lifeRatio); // Fade out over lifetime
+      // Calculate alpha based on whether fade is enabled
+      let alpha;
+      if (fadeEnabled) {
+        // Fade out over lifetime when enabled
+        const lifeRatio = particle.age / particle.lifetime;
+        alpha = Math.max(0, 1.0 - lifeRatio); 
+      } else {
+        // Constant full opacity when disabled (except for expired particles)
+        alpha = particle.age < particle.lifetime ? 1.0 : 0.0;
+      }
       
       // Skip particles that are completely transparent
       if (alpha <= 0.01) return;
