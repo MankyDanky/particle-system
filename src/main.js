@@ -95,8 +95,9 @@ async function main() {
   });
   device.queue.writeBuffer(indexBuffer, 0, indices);
   
-  // Create a uniform buffer for the transformation matrix
-  const uniformBufferSize = 4 * 4 * 4; // 4x4 matrix of 4-byte floats
+  // Create a uniform buffer for the transformation matrix + camera position
+  // The shader expects at least 80 bytes, so we'll create a buffer of that size
+  const uniformBufferSize = 80; // Aligned size for MVP matrix + camera position
   const uniformBuffer = device.createBuffer({
     size: uniformBufferSize,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -107,6 +108,7 @@ async function main() {
     code: `
       struct Uniforms {
         transform: mat4x4<f32>,
+        cameraPosition: vec3<f32>,
       }
 
       @binding(0) @group(0) var<uniform> uniforms : Uniforms;
@@ -114,6 +116,7 @@ async function main() {
       struct VertexInput {
         @location(0) position : vec3<f32>,
         @location(1) color : vec3<f32>,
+        @location(2) centerPosition : vec3<f32>, // Billboard center position
       }
 
       struct VertexOutput {
@@ -124,7 +127,26 @@ async function main() {
       @vertex
       fn vs_main(input: VertexInput) -> VertexOutput {
         var output : VertexOutput;
-        output.position = uniforms.transform * vec4<f32>(input.position, 1.0);
+        
+        // Extract billboard center and local vertex position
+        let billboardCenter = input.centerPosition;
+        let localPos = input.position - billboardCenter;
+        
+        // Direction from billboard center to camera (for facing)
+        let toCamera = normalize(uniforms.cameraPosition - billboardCenter);
+        
+        // Calculate billboard orientation axes
+        let worldUp = vec3<f32>(0.0, 1.0, 0.0);
+        let right = normalize(cross(worldUp, toCamera));
+        let up = cross(toCamera, right);
+        
+        // Reorient the vertex relative to billboard center
+        let billboardPos = billboardCenter + 
+                            right * localPos.x +
+                            up * localPos.y;
+        
+        // Transform to clip space
+        output.position = uniforms.transform * vec4<f32>(billboardPos, 1.0);
         output.color = input.color;
         return output;
       }
@@ -156,7 +178,7 @@ async function main() {
       module: shaderModule,
       entryPoint: 'vs_main',
       buffers: [{
-        arrayStride: 6 * 4, // 6 floats (3 position, 3 color)
+        arrayStride: 9 * 4, // 9 floats (3 position, 3 color, 3 center)
         attributes: [
           { // position
             shaderLocation: 0,
@@ -165,7 +187,12 @@ async function main() {
           },
           { // color
             shaderLocation: 1,
-            offset: 3 * 4, // after position
+            offset: 3 * 4,
+            format: 'float32x3',
+          },
+          { // billboard center
+            shaderLocation: 2,
+            offset: 6 * 4,
             format: 'float32x3',
           },
         ],
@@ -248,17 +275,24 @@ async function main() {
     // 2. Keep their positions fixed in world space
     
     // Get the billboard rotation matrix
-    const billboardRotation = createBillboardRotation(cameraPos);
+    // const billboardRotation = createBillboardRotation(cameraPos);
     
     // Update vertex buffer with rotated billboard vertices
-    const updatedVertices = updateBillboardVertices(billboardPositions, billboardRotation, size);
-    device.queue.writeBuffer(vertexBuffer, 0, updatedVertices);
+    // const updatedVertices = updateBillboardVertices(billboardPositions, billboardRotation, size);
+    // device.queue.writeBuffer(vertexBuffer, 0, updatedVertices);
     
-    // Use the view-projection matrix directly (keep this part unchanged)
+    // Create a combined view-projection matrix
     const mvpMatrix = multiplyMatrices(projectionMatrix, viewMatrix);
     
-    // Write this matrix to the uniform buffer
+    // Write MVP matrix to the uniform buffer
     device.queue.writeBuffer(uniformBuffer, 0, mvpMatrix);
+    
+    // Create a Float32Array with camera position (with padding for alignment)
+    const cameraData = new Float32Array([cameraX, cameraY, cameraZ, 0.0]);
+    
+    // Write camera position at the correct offset (after the MVP matrix)
+    // Matrix is 64 bytes, camera position is 16 bytes
+    device.queue.writeBuffer(uniformBuffer, 64, cameraData);
     
     // Rest of rendering code (unchanged)...
     const commandEncoder = device.createCommandEncoder();
@@ -379,16 +413,11 @@ async function main() {
 
 // Function to create multiple billboards
 function createBillboards(positions) {
-  // Billboard size
   const size = 0.5;
-  
-  // Arrays to store all vertices and indices
   const allVertices = [];
   const allIndices = [];
   
-  // For each position, create a billboard
   positions.forEach((pos, billboardIndex) => {
-    // Each billboard has 4 vertices with different colors
     const colors = [
       [1.0, 0.0, 0.0], // red
       [0.0, 1.0, 0.0], // green
@@ -396,7 +425,6 @@ function createBillboards(positions) {
       [1.0, 1.0, 0.0]  // yellow
     ];
     
-    // Create 4 vertices for this billboard (a quad)
     const corners = [
       [-size, -size, 0], // bottom-left
       [size, -size, 0],  // bottom-right
@@ -415,12 +443,17 @@ function createBillboards(positions) {
       allVertices.push(colors[i][0]);
       allVertices.push(colors[i][1]);
       allVertices.push(colors[i][2]);
+      
+      // Billboard center (for GPU billboarding)
+      allVertices.push(pos[0]);
+      allVertices.push(pos[1]);
+      allVertices.push(pos[2]);
     });
     
-    // Add indices for this billboard (2 triangles)
-    const indexOffset = billboardIndex * 4; // 4 vertices per billboard
-    allIndices.push(indexOffset + 0, indexOffset + 1, indexOffset + 2); // First triangle
-    allIndices.push(indexOffset + 2, indexOffset + 3, indexOffset + 0); // Second triangle
+    // Add indices (same as before)
+    const indexOffset = billboardIndex * 4;
+    allIndices.push(indexOffset + 0, indexOffset + 1, indexOffset + 2);
+    allIndices.push(indexOffset + 2, indexOffset + 3, indexOffset + 0);
   });
   
   return {
