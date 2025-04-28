@@ -895,7 +895,7 @@ async function main() {
         
         // Apply blur in specified direction
         for (var i = 1; i < 5; i++) {
-          let offset = uniforms.direction * f32(i) * pixelSize * 2.0; // Increased blur radius
+          let offset = uniforms.direction * f32(i) * pixelSize * 2; // Increased blur radius
           result += textureSample(inputTexture, texSampler, input.texCoord + offset) * weights[i];
           result += textureSample(inputTexture, texSampler, input.texCoord - offset) * weights[i];
         }
@@ -909,7 +909,7 @@ async function main() {
   const compositeShaderModule = device.createShaderModule({
     code: `
       // Increase bloom intensity for a more visible effect
-      const BLOOM_INTENSITY: f32 = 1;
+      const BLOOM_INTENSITY: f32 = 3;
 
       @binding(0) @group(0) var texSampler: sampler;
       @binding(1) @group(0) var originalTexture: texture_2d<f32>;
