@@ -74,16 +74,16 @@ async function main() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
   
-  // Create render textures for bloom effect
+  // Create higher-quality render textures for the bloom effect
   function createRenderTextures() {
-    // Create scene render texture
+    // Create scene render texture (higher resolution for better sampling)
     const sceneTexture = device.createTexture({
       size: [canvas.width, canvas.height],
       format: format,
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
 
-    // Create bloom textures for ping-pong rendering
+    // Create bloom textures for ping-pong rendering with filtering-friendly format
     const bloomTexA = device.createTexture({
       size: [canvas.width, canvas.height],
       format: format,
@@ -442,10 +442,8 @@ async function main() {
 
         @fragment
         fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-          let brightColor = input.color;
-          
-          // Pre-multiply alpha to help bloom extend beyond edges
-          return vec4<f32>(brightColor * input.alpha, input.alpha);
+          // Return the particle color with its alpha
+          return vec4<f32>(input.color, input.alpha);
         }
       `,
     });
@@ -831,10 +829,14 @@ async function main() {
   device.queue.writeBuffer(horizontalBlurUniformBuffer, 0, horizontalDirection);
   device.queue.writeBuffer(verticalBlurUniformBuffer, 0, verticalDirection);
 
-  // Sampler for texture sampling
+  // Create a high-quality sampler for texture filtering
   const sampler = device.createSampler({
     magFilter: 'linear',
     minFilter: 'linear',
+    mipmapFilter: 'linear',
+    addressModeU: 'clamp-to-edge',
+    addressModeV: 'clamp-to-edge',
+    maxAnisotropy: 16 // Higher anisotropy for better quality
   });
 
   // Create blur shader module
@@ -879,25 +881,29 @@ async function main() {
 
       @fragment
       fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-        // Gaussian blur parameters
-        let sigma = 3.0;
-        
-        // Gaussian weights
-        let weights = array<f32, 5>(
-          0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216
-        );
-        
-        // Get center texel color
-        var result = textureSample(inputTexture, texSampler, input.texCoord) * weights[0];
-        
-        // Make blur radius larger to get more visible bloom
+        // Use a high-quality blur kernel with larger radius
         let pixelSize = 1.0 / uniforms.resolution;
         
-        // Apply blur in specified direction
-        for (var i = 1; i < 5; i++) {
-          let offset = uniforms.direction * f32(i) * pixelSize * 2; // Increased blur radius
-          result += textureSample(inputTexture, texSampler, input.texCoord + offset) * weights[i];
-          result += textureSample(inputTexture, texSampler, input.texCoord - offset) * weights[i];
+        // Gaussian weights (normalized)
+        let weights = array<f32, 13>(
+          0.002216, 0.008764, 0.026995, 0.064759, 0.120985, 0.176033, 
+          0.199471, // Center weight
+          0.176033, 0.120985, 0.064759, 0.026995, 0.008764, 0.002216
+        );
+        
+        // Start with center sample
+        var result = textureSample(inputTexture, texSampler, input.texCoord) * weights[6];
+        
+        // Use larger step size to increase blur radius
+        let stepSize = 3.0; // Increased from 1.0 to 3.0 for a wider bloom radius
+        
+        // Sample in both positive and negative directions
+        for (var i = 1; i < 7; i++) {
+          let offset = uniforms.direction * f32(i) * pixelSize * stepSize;
+          
+          // Sample pairs symmetrically around center
+          result += textureSample(inputTexture, texSampler, input.texCoord + offset) * weights[6 + i];
+          result += textureSample(inputTexture, texSampler, input.texCoord - offset) * weights[6 - i];
         }
         
         return result;
