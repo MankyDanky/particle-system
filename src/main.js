@@ -81,19 +81,25 @@ async function main() {
       size: [canvas.width, canvas.height],
       format: format,
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      mipLevelCount: 1,  // No mipmaps needed for direct rendering
+      sampleCount: 1
     });
 
-    // Create bloom textures for ping-pong rendering with filtering-friendly format
+    // For bloom textures, use specific filtering-friendly settings
     const bloomTexA = device.createTexture({
       size: [canvas.width, canvas.height],
       format: format,
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      mipLevelCount: 1,
+      sampleCount: 1
     });
 
     const bloomTexB = device.createTexture({
       size: [canvas.width, canvas.height],
       format: format,
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      mipLevelCount: 1,
+      sampleCount: 1
     });
 
     return { sceneTexture, bloomTexA, bloomTexB };
@@ -133,13 +139,13 @@ async function main() {
       usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
     
-    // Update the blur uniforms with new resolution
+    // Update the blur uniforms with new resolution values
     const horizontalDirection = new Float32Array([1.0, 0.0, canvas.width, canvas.height, 0.0, 0.0, 0.0, 0.0]);
     const verticalDirection = new Float32Array([0.0, 1.0, canvas.width, canvas.height, 0.0, 0.0, 0.0, 0.0]);
     device.queue.writeBuffer(horizontalBlurUniformBuffer, 0, horizontalDirection);
     device.queue.writeBuffer(verticalBlurUniformBuffer, 0, verticalDirection);
     
-    // Recreate bind groups with new textures
+    // Recreate bind groups with the new textures
     horizontalBlurBindGroup = device.createBindGroup({
       layout: bloomBindGroupLayout,
       entries: [
@@ -883,13 +889,13 @@ async function main() {
     maxAnisotropy: 16 // Higher anisotropy for better quality
   });
 
-  // Create blur shader module
+  // Replace the blur shader module with this improved version
   const blurShaderModule = device.createShaderModule({
     code: `
       struct BloomUniforms {
         direction: vec2<f32>,
         resolution: vec2<f32>,
-        padding: vec2<f32>,  // Add padding to meet 32-byte alignment requirements
+        padding: vec2<f32>,
       }
 
       @binding(0) @group(0) var texSampler: sampler;
@@ -925,41 +931,40 @@ async function main() {
 
       @fragment
       fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-        // Use a high-quality blur kernel with larger radius
+        // Create a high-quality Gaussian blur with more samples
         let pixelSize = 1.0 / uniforms.resolution;
         
-        // Gaussian weights (normalized)
-        let weights = array<f32, 13>(
-          0.002216, 0.008764, 0.026995, 0.064759, 0.120985, 0.176033, 
-          0.199471, // Center weight
-          0.176033, 0.120985, 0.064759, 0.026995, 0.008764, 0.002216
+        // Using 15 samples for a much smoother blur
+        var result = vec4<f32>(0.0);
+        var totalWeight = 0.0;
+        
+        // True Gaussian weights for 15 samples
+        let weights = array<f32, 15>(
+          0.0045, 0.0154, 0.0383, 0.0703, 0.1055, 0.1308, 0.1333,  // first 7 weights
+          0.1124,                                                   // center weight
+          0.1333, 0.1308, 0.1055, 0.0703, 0.0383, 0.0154, 0.0045   // last 7 weights
         );
         
-        // Start with center sample
-        var result = textureSample(inputTexture, texSampler, input.texCoord) * weights[6];
-        
-        // Use larger step size to increase blur radius
-        let stepSize = 3.0; // Increased from 1.0 to 3.0 for a wider bloom radius
-        
-        // Sample in both positive and negative directions
-        for (var i = 1; i < 7; i++) {
-          let offset = uniforms.direction * f32(i) * pixelSize * stepSize;
+        // Sample at fractional pixel offsets for smoother interpolation
+        for (var i = -7; i <= 7; i++) {
+          let offset = uniforms.direction * (f32(i) * pixelSize * 2);
+          let weight = weights[i + 7];
           
-          // Sample pairs symmetrically around center
-          result += textureSample(inputTexture, texSampler, input.texCoord + offset) * weights[6 + i];
-          result += textureSample(inputTexture, texSampler, input.texCoord - offset) * weights[6 - i];
+          result += textureSample(inputTexture, texSampler, input.texCoord + offset) * weight;
+          totalWeight += weight;
         }
         
-        return result;
+        // Normalize the result and apply a slight intensity boost
+        return result / totalWeight * 1.1;
       }
     `,
   });
 
-  // Create final composite shader module
+  // Update the composite shader module
   const compositeShaderModule = device.createShaderModule({
     code: `
-      // Increase bloom intensity for a more visible effect
-      const BLOOM_INTENSITY: f32 = 3;
+      // Carefully balanced bloom intensity
+      const BLOOM_INTENSITY: f32 = 1.0;
 
       @binding(0) @group(0) var texSampler: sampler;
       @binding(1) @group(0) var originalTexture: texture_2d<f32>;
@@ -997,8 +1002,11 @@ async function main() {
         let originalColor = textureSample(originalTexture, texSampler, input.texCoord);
         let bloomColor = textureSample(blurredTexture, texSampler, input.texCoord);
         
-        // Add bloom to original color using hardcoded intensity and make sure alpha isn't affected
-        return vec4<f32>(originalColor.rgb + (bloomColor.rgb * BLOOM_INTENSITY), originalColor.a);
+        // Apply a subtle curve to make the bloom smoother
+        let mappedBloom = pow(bloomColor.rgb, vec3<f32>(0.85));
+        
+        // Add bloom to original with carefully calibrated intensity
+        return vec4<f32>(originalColor.rgb + (mappedBloom * BLOOM_INTENSITY), originalColor.a);
       }
     `,
   });
@@ -1056,18 +1064,8 @@ async function main() {
       entryPoint: 'fs_main',
       targets: [{
         format: format,
-        blend: {
-          color: {
-            srcFactor: 'one',
-            dstFactor: 'one',
-            operation: 'add',
-          },
-          alpha: {
-            srcFactor: 'one',
-            dstFactor: 'one',
-            operation: 'add',
-          },
-        },
+        // Remove the blend settings to prevent alpha issues during blur
+        // This ensures full-intensity blur information is preserved
       }],
     },
     primitive: {
@@ -1307,37 +1305,53 @@ async function main() {
     
     scenePassEncoder.end();
     
-    // 2. Apply horizontal blur from scene texture to bloomTexA
-    const horizontalBlurPassDescriptor = {
-      colorAttachments: [{
-        view: bloomTexA.createView(),
-        loadOp: 'clear',
-        storeOp: 'store',
-        clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }, // Clear to transparent
-      }],
-    };
-    
-    const horizontalBlurPassEncoder = commandEncoder.beginRenderPass(horizontalBlurPassDescriptor);
-    horizontalBlurPassEncoder.setPipeline(blurPipeline);
-    horizontalBlurPassEncoder.setBindGroup(0, horizontalBlurBindGroup);
-    horizontalBlurPassEncoder.draw(3); // Draw a fullscreen triangle
-    horizontalBlurPassEncoder.end();
-    
-    // 3. Apply vertical blur from bloomTexA to bloomTexB
-    const verticalBlurPassDescriptor = {
-      colorAttachments: [{
-        view: bloomTexB.createView(),
-        loadOp: 'clear',
-        storeOp: 'store',
-        clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }, // Clear to transparent
-      }],
-    };
-    
-    const verticalBlurPassEncoder = commandEncoder.beginRenderPass(verticalBlurPassDescriptor);
-    verticalBlurPassEncoder.setPipeline(blurPipeline);
-    verticalBlurPassEncoder.setBindGroup(0, verticalBlurBindGroup);
-    verticalBlurPassEncoder.draw(3); // Draw a fullscreen triangle
-    verticalBlurPassEncoder.end();
+    // Apply multiple blur passes for higher quality bloom
+    // First ping-pong between textures for multiple passes
+    for (let i = 0; i < 3; i++) { // Increased to 3 passes for higher quality
+      // 2. Apply horizontal blur from scene texture (or bloomTexB in subsequent passes) to bloomTexA
+      const horizontalBlurPassDescriptor = {
+        colorAttachments: [{
+          view: bloomTexA.createView(),
+          loadOp: 'clear',
+          storeOp: 'store',
+          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
+        }],
+      };
+      
+      const horizontalBlurPassEncoder = commandEncoder.beginRenderPass(horizontalBlurPassDescriptor);
+      horizontalBlurPassEncoder.setPipeline(blurPipeline);
+      
+      // On first pass, use scene texture as input; otherwise use result of previous vertical pass
+      const horizontalBindGroup = i === 0 ? horizontalBlurBindGroup : 
+        device.createBindGroup({
+          layout: bloomBindGroupLayout,
+          entries: [
+            { binding: 0, resource: sampler },
+            { binding: 1, resource: bloomTexB.createView() },
+            { binding: 2, resource: { buffer: horizontalBlurUniformBuffer } }
+          ],
+        });
+      
+      horizontalBlurPassEncoder.setBindGroup(0, horizontalBindGroup);
+      horizontalBlurPassEncoder.draw(3);
+      horizontalBlurPassEncoder.end();
+      
+      // 3. Apply vertical blur from bloomTexA to bloomTexB
+      const verticalBlurPassDescriptor = {
+        colorAttachments: [{
+          view: bloomTexB.createView(),
+          loadOp: 'clear',
+          storeOp: 'store',
+          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
+        }],
+      };
+      
+      const verticalBlurPassEncoder = commandEncoder.beginRenderPass(verticalBlurPassDescriptor);
+      verticalBlurPassEncoder.setPipeline(blurPipeline);
+      verticalBlurPassEncoder.setBindGroup(0, verticalBlurBindGroup);
+      verticalBlurPassEncoder.draw(3);
+      verticalBlurPassEncoder.end();
+    }
     
     // 4. Final composite pass - blend the bloomed particles onto a solid background
     const compositePassDescriptor = {
@@ -1352,7 +1366,7 @@ async function main() {
     const compositePassEncoder = commandEncoder.beginRenderPass(compositePassDescriptor);
     compositePassEncoder.setPipeline(compositePipeline);
     compositePassEncoder.setBindGroup(0, compositeBindGroup);
-    compositePassEncoder.draw(3); // Draw a fullscreen triangle
+    compositePassEncoder.draw(3);
     compositePassEncoder.end();
     
     device.queue.submit([commandEncoder.finish()]);
