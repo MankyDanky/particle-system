@@ -54,6 +54,12 @@ async function main() {
   let emissionRate = 10; // particles per second
   let emissionDuration = 10; // seconds
   
+  // Emission shape settings
+  let emissionShape = 'cube'; // Default: cube
+  let cubeLength = 2.0; // Default size of cube
+  let innerRadius = 0.0; // Default inner radius for sphere
+  let outerRadius = 2.0; // Default outer radius for sphere
+  
   // Typed array for particle data: [x, y, z, r, g, b, age, lifetime]
   const particleData = new Float32Array(MAX_PARTICLES * 8);
   
@@ -107,6 +113,17 @@ async function main() {
   const particleColorInput = document.getElementById('particle-color');
   const startColorInput = document.getElementById('start-color');
   const endColorInput = document.getElementById('end-color');
+  
+  // Shape UI elements
+  const emissionShapeSelect = document.getElementById('emission-shape');
+  const cubeSettings = document.getElementById('cube-settings');
+  const sphereSettings = document.getElementById('sphere-settings');
+  const cubeLengthSlider = document.getElementById('cube-length-slider');
+  const cubeLengthValue = document.getElementById('cube-length-value');
+  const innerRadiusSlider = document.getElementById('inner-radius-slider');
+  const innerRadiusValue = document.getElementById('inner-radius-value');
+  const outerRadiusSlider = document.getElementById('outer-radius-slider');
+  const outerRadiusValue = document.getElementById('outer-radius-value');
   
   // Settings state
   let fadeEnabled = fadeCheckbox.checked;
@@ -236,6 +253,60 @@ async function main() {
       burstEmissionContainer.classList.add('hidden');
     }
   });
+  
+  // Emission shape event listeners
+  emissionShapeSelect.addEventListener('change', () => {
+    emissionShape = emissionShapeSelect.value;
+    
+    if (emissionShape === 'cube') {
+      cubeSettings.classList.remove('hidden');
+      sphereSettings.classList.add('hidden');
+    } else if (emissionShape === 'sphere') {
+      cubeSettings.classList.add('hidden');
+      sphereSettings.classList.remove('hidden');
+    }
+  });
+  
+  // Cube length slider
+  cubeLengthSlider.addEventListener('input', () => {
+    const value = cubeLengthSlider.value;
+    cubeLengthValue.textContent = value;
+    cubeLength = parseFloat(value);
+  });
+  
+  // Inner radius slider
+  innerRadiusSlider.addEventListener('input', () => {
+    const value = innerRadiusSlider.value;
+    innerRadiusValue.textContent = value;
+    innerRadius = parseFloat(value);
+    
+    // Make sure inner radius is less than outer radius
+    if (innerRadius >= outerRadius) {
+      outerRadiusSlider.value = innerRadius + 0.1;
+      outerRadiusValue.textContent = outerRadiusSlider.value;
+      outerRadius = parseFloat(outerRadiusSlider.value);
+    }
+  });
+  
+  // Outer radius slider
+  outerRadiusSlider.addEventListener('input', () => {
+    const value = outerRadiusSlider.value;
+    outerRadiusValue.textContent = value;
+    outerRadius = parseFloat(value);
+    
+    // Make sure outer radius is greater than inner radius
+    if (outerRadius <= innerRadius) {
+      innerRadiusSlider.value = outerRadius - 0.1;
+      innerRadiusValue.textContent = innerRadiusSlider.value;
+      innerRadius = parseFloat(innerRadiusSlider.value);
+    }
+  });
+  
+  // Initialize emission shape UI
+  emissionShapeSelect.value = emissionShape;
+  cubeLengthValue.textContent = cubeLengthSlider.value;
+  innerRadiusValue.textContent = innerRadiusSlider.value;
+  outerRadiusValue.textContent = outerRadiusSlider.value;
   
   // Initialize UI based on initial burst mode state
   burstCheckbox.checked = burstMode;
@@ -518,11 +589,40 @@ async function main() {
     if (activeParticles >= particleCount) return false;
     
     const index = activeParticles * 8;
+    let posX, posY, posZ;
     
-    // Generate random position near origin
-    const posX = (Math.random() - 0.5) * 2;
-    const posY = (Math.random() - 0.5) * 2;
-    const posZ = (Math.random() - 0.5) * 2;
+    if (emissionShape === 'cube') {
+      // Generate random position within a cube
+      const halfLength = cubeLength / 2;
+      posX = (Math.random() - 0.5) * cubeLength;
+      posY = (Math.random() - 0.5) * cubeLength;
+      posZ = (Math.random() - 0.5) * cubeLength;
+    } else if (emissionShape === 'sphere') {
+      // Generate random position within a sphere shell (between inner and outer radius)
+      // First generate random direction (uniform distribution on sphere)
+      let theta = Math.random() * 2 * Math.PI; // azimuthal angle
+      let phi = Math.acos(2 * Math.random() - 1); // polar angle
+      
+      // Calculate direction vector
+      let dirX = Math.sin(phi) * Math.cos(theta);
+      let dirY = Math.sin(phi) * Math.sin(theta);
+      let dirZ = Math.cos(phi);
+      
+      // Generate random radius between inner and outer
+      let radius;
+      if (innerRadius === 0) {
+        // For solid sphere, use cubic distribution for uniform volume distribution
+        radius = outerRadius * Math.cbrt(Math.random());
+      } else {
+        // For shell, interpolate between inner and outer
+        radius = innerRadius + (outerRadius - innerRadius) * Math.random();
+      }
+      
+      // Calculate position
+      posX = dirX * radius;
+      posY = dirY * radius;
+      posZ = dirZ * radius;
+    }
     
     // Normalize to get direction vector from origin
     const length = Math.sqrt(posX * posX + posY * posY + posZ * posZ) || 0.0001; // Avoid division by zero
