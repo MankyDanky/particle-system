@@ -1,697 +1,81 @@
-import "./style.css"
-
-async function initWebGPU() {
-  if (!navigator.gpu) {
-    throw new Error("WebGPU not supported on this browser.");
-  }
-
-  const canvas = document.getElementById('webgpu-canvas');
-  const context = canvas.getContext('webgpu');
-  const adapter = await navigator.gpu.requestAdapter();
-  const device = await adapter.requestDevice();
-  const format = navigator.gpu.getPreferredCanvasFormat();
-
-  context.configure({
-      device: device,
-      format: format,
-      alphaMode: 'premultiplied',
-  });
-
-  return { device, context, format };
-}
+import "./style.css";
+import { initWebGPU, createRenderTextures, createDepthTexture, createBuffer } from "./modules/webgpu.js";
+import { ParticleSystem } from "./modules/particleSystem.js";
+import { createBindGroupLayouts, createRenderPipelines, createBindGroups, createSampler } from "./modules/renderers.js";
+import { createLookAtMatrix, createProjectionMatrix, multiplyMatrices, hexToRgb } from "./modules/utils.js";
+import { ParticleUI, setupCameraControls } from "./modules/ui.js";
 
 async function main() {
-  const { device, context, format } = await initWebGPU();
+  // Initialize WebGPU
+  const { device, context, format, canvas } = await initWebGPU();
   
-  // Camera control variables
-  let cameraRotationX = 0;
-  let cameraRotationY = 0;
-  let isDragging = false;
-  let lastMouseX = 0;
-  let lastMouseY = 0;
-  const rotationSpeed = 0.01;
+  // Initialize configuration state
+  const config = {
+    // Camera control settings
+    cameraRotationX: 0,
+    cameraRotationY: 0,
+    isDragging: false,
+    lastMouseX: 0,
+    lastMouseY: 0,
+    rotationSpeed: 0.01,
+    cameraDistance: 10.0,
+    minZoom: 3.0,
+    maxZoom: 20.0,
+    
+    // Particle settings
+    maxParticles: 10000,
+    particleCount: 100,
+    lifetime: 5,
+    emissionRate: 10,
+    emissionDuration: 10,
+    emissionShape: 'cube',
+    cubeLength: 2.0,
+    innerRadius: 0.0,
+    outerRadius: 2.0,
+    particleSize: 0.5,
+    particleSpeed: 1.0,
+    
+    // Appearance settings
+    fadeEnabled: true,
+    colorTransitionEnabled: false,
+    particleColor: hexToRgb('#ffffff'),
+    startColor: hexToRgb('#ff0000'),
+    endColor: hexToRgb('#0000ff'),
+    
+    // Bloom settings
+    bloomEnabled: true,
+    bloomIntensity: 1.0,
+    
+    // Mode settings
+    burstMode: false,
+    
+    // Callback methods for UI interactions
+    onAppearanceChange: updateAppearanceUniform,
+    onColorChange: updateParticleColors,
+    onSizeChange: updateQuadGeometry,
+    onSpeedChange: updateParticleVelocities,
+    onBloomIntensityChange: updateBloomIntensity,
+    onRespawn: spawnParticles
+  };
   
-  // Zoom control variables
-  let cameraDistance = 10.0;
-  const minZoom = 3.0;
-  const maxZoom = 20.0;
-  const zoomSpeed = 0.5;
+  // Set up UI elements
+  const ui = new ParticleUI(config);
   
-  // Define the size of each billboard
-  const size = 0.5;
+  // Set up camera controls
+  setupCameraControls(canvas, config);
   
-  // Bloom settings
-  const BLOOM_INTENSITY = 1.0;
-  const BLUR_PASSES = 4;  // Number of blur passes
-  let bloomEnabled = true;
-  let bloomIntensity = 1.0;
-  let bloomTextures = [];
-  let bloomBindGroups = [];
+  // Create render textures
+  let { sceneTexture, bloomTexA, bloomTexB } = createRenderTextures(device, format, canvas.width, canvas.height);
   
-  // Particle system state
-  let particleCount = 100; // Default for burst mode
-  const MAX_PARTICLES = 10000;
-  let activeParticles = 0;
-  let lastTime = performance.now();
-  let emissionTimer = 0;
-  let currentEmissionTime = 0;
-  let emitting = false;
-  let burstMode = false;
-  
-  // Appearance settings uniform buffer (to avoid shader recompilation)
-  const appearanceUniformBuffer = device.createBuffer({
-    size: 64, // [fadeEnabled(f32), colorTransitionEnabled(f32), particleSize(f32), padding(f32), 
-               // particleColor(vec3), padding(f32), startColor(vec3), padding(f32), endColor(vec3), padding(f32)]
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-  });
-  
-  // Emission settings
-  let emissionRate = 10; // particles per second
-  let emissionDuration = 10; // seconds
-  
-  // Emission shape settings
-  let emissionShape = 'cube'; // Default: cube
-  let cubeLength = 2.0; // Default size of cube
-  let innerRadius = 0.0; // Default inner radius for sphere
-  let outerRadius = 2.0; // Default outer radius for sphere
-  
-  // Typed array for particle data: [x, y, z, r, g, b, age, lifetime]
-  const particleData = new Float32Array(MAX_PARTICLES * 8);
-  
-  // Canvas setup
-  const canvas = document.getElementById('webgpu-canvas');
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-  
-  // Create higher-quality render textures for the bloom effect
-  function createRenderTextures() {
-    // Create scene render texture (higher resolution for better sampling)
-    const sceneTexture = device.createTexture({
-      size: [canvas.width, canvas.height],
-      format: format,
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-      mipLevelCount: 1,  // No mipmaps needed for direct rendering
-      sampleCount: 1
-    });
-
-    // For bloom textures, use specific filtering-friendly settings
-    const bloomTexA = device.createTexture({
-      size: [canvas.width, canvas.height],
-      format: format,
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-      mipLevelCount: 1,
-      sampleCount: 1
-    });
-
-    const bloomTexB = device.createTexture({
-      size: [canvas.width, canvas.height],
-      format: format,
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-      mipLevelCount: 1,
-      sampleCount: 1
-    });
-
-    return { sceneTexture, bloomTexA, bloomTexB };
-  }
-
-  // Create bloom textures
-  let { sceneTexture, bloomTexA, bloomTexB } = createRenderTextures();
-
   // Create depth texture
-  let depthTexture = device.createTexture({
-    size: [canvas.width, canvas.height],
-    format: 'depth24plus',
-    usage: GPUTextureUsage.RENDER_ATTACHMENT,
-  });
+  let depthTexture = createDepthTexture(device, canvas.width, canvas.height);
   
-  // Resize function with better texture management
-  function resizeCanvasToDisplaySize() {
-    // Store old textures
-    const oldSceneTexture = sceneTexture;
-    const oldBloomTexA = bloomTexA;
-    const oldBloomTexB = bloomTexB;
-    const oldDepthTexture = depthTexture;
-    
-    // Update canvas size
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    
-    // Create new textures with updated size
-    const { sceneTexture: newScene, bloomTexA: newBloomA, bloomTexB: newBloomB } = createRenderTextures();
-    sceneTexture = newScene;
-    bloomTexA = newBloomA;
-    bloomTexB = newBloomB;
-    
-    depthTexture = device.createTexture({
-      size: [canvas.width, canvas.height],
-      format: 'depth24plus',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT,
-    });
-    
-    // Update the blur uniforms with new resolution values
-    const horizontalDirection = new Float32Array([1.0, 0.0, canvas.width, canvas.height, 0.0, 0.0, 0.0, 0.0]);
-    const verticalDirection = new Float32Array([0.0, 1.0, canvas.width, canvas.height, 0.0, 0.0, 0.0, 0.0]);
-    device.queue.writeBuffer(horizontalBlurUniformBuffer, 0, horizontalDirection);
-    device.queue.writeBuffer(verticalBlurUniformBuffer, 0, verticalDirection);
-    
-    // Recreate bind groups with the new textures
-    horizontalBlurBindGroup = device.createBindGroup({
-      layout: bloomBindGroupLayout,
-      entries: [
-        { binding: 0, resource: sampler },
-        { binding: 1, resource: sceneTexture.createView() },
-        { binding: 2, resource: { buffer: horizontalBlurUniformBuffer } }
-      ],
-    });
-    
-    verticalBlurBindGroup = device.createBindGroup({
-      layout: bloomBindGroupLayout,
-      entries: [
-        { binding: 0, resource: sampler },
-        { binding: 1, resource: bloomTexA.createView() },
-        { binding: 2, resource: { buffer: verticalBlurUniformBuffer } }
-      ],
-    });
-    
-    compositeBindGroup = device.createBindGroup({
-      layout: compositeBindGroupLayout,
-      entries: [
-        { binding: 0, resource: sampler },
-        { binding: 1, resource: sceneTexture.createView() },
-        { binding: 2, resource: bloomTexB.createView() },
-        { binding: 3, resource: { buffer: bloomIntensityBuffer } }
-      ],
-    });
-    
-    // Also recreate the directRenderBindGroup to prevent using destroyed textures
-    directRenderBindGroup = device.createBindGroup({
-      layout: compositeBindGroupLayout,
-      entries: [
-        { binding: 0, resource: sampler },
-        { binding: 1, resource: sceneTexture.createView() },
-        { binding: 2, resource: bloomTexB.createView(), },  // Not used when bloom is disabled, but needed for layout compatibility
-        { binding: 3, resource: { buffer: bloomIntensityBuffer } }
-      ],
-    });
-    
-    // Schedule the old textures for destruction after the current frame completes
-    requestAnimationFrame(() => {
-      // Destroy old textures in the next frame when they're no longer in use
-      oldSceneTexture.destroy();
-      oldBloomTexA.destroy();
-      oldBloomTexB.destroy();
-      oldDepthTexture.destroy();
-    });
-  }
-  
-  window.addEventListener('resize', resizeCanvasToDisplaySize);
-  
-  // Get UI elements
-  const lifetimeSlider = document.getElementById('lifetime-slider');
-  const lifetimeValue = document.getElementById('lifetime-value');
-  const emissionDurationSlider = document.getElementById('emission-duration-slider');
-  const emissionDurationValue = document.getElementById('emission-duration-value');
-  const emissionRateSlider = document.getElementById('emission-rate-slider');
-  const emissionRateValue = document.getElementById('emission-rate-value');
-  const particleCountSlider = document.getElementById('particle-count-slider');
-  const particleCountValue = document.getElementById('particle-count-value');
-  const burstCheckbox = document.getElementById('burst-checkbox');
-  const continuousEmissionContainer = document.getElementById('continuous-emission-container');
-  const burstEmissionContainer = document.getElementById('burst-emission-container');
-  const sizeSlider = document.getElementById('size-slider');
-  const sizeValue = document.getElementById('size-value');
-  const speedSlider = document.getElementById('speed-slider');
-  const speedValue = document.getElementById('speed-value');
-  const fadeCheckbox = document.getElementById('fade-checkbox');
-  const colorTransitionCheckbox = document.getElementById('color-transition-checkbox');
-  const singleColorContainer = document.getElementById('single-color-container');
-  const gradientColorContainer = document.getElementById('gradient-color-container');
-  const particleColorInput = document.getElementById('particle-color');
-  const startColorInput = document.getElementById('start-color');
-  const endColorInput = document.getElementById('end-color');
-  const bloomCheckbox = document.getElementById('bloom-checkbox');
-  const bloomIntensitySlider = document.getElementById('bloom-intensity-slider');
-  const bloomIntensityValue = document.getElementById('bloom-intensity-value');
-  const bloomIntensityContainer = document.getElementById('bloom-intensity-container');
-  
-  // Shape UI elements
-  const emissionShapeSelect = document.getElementById('emission-shape');
-  const cubeSettings = document.getElementById('cube-settings');
-  const sphereSettings = document.getElementById('sphere-settings');
-  const cubeLengthSlider = document.getElementById('cube-length-slider');
-  const cubeLengthValue = document.getElementById('cube-length-value');
-  const innerRadiusSlider = document.getElementById('inner-radius-slider');
-  const innerRadiusValue = document.getElementById('inner-radius-value');
-  const outerRadiusSlider = document.getElementById('outer-radius-slider');
-  const outerRadiusValue = document.getElementById('outer-radius-value');
-  
-  // Settings state
-  let fadeEnabled = fadeCheckbox.checked;
-  let colorTransitionEnabled = colorTransitionCheckbox.checked;
-  let particleSize = parseFloat(sizeSlider.value);
-  let particleSpeed = parseFloat(speedSlider.value);
-  
-  // Velocity array to store direction vectors for each particle
-  const particleVelocities = new Float32Array(MAX_PARTICLES * 3); // x, y, z velocities
-  
-  // Convert hex color to RGB [0-1]
-  function hexToRgb(hex) {
-    const r = parseInt(hex.slice(1, 3), 16) / 255;
-    const g = parseInt(hex.slice(3, 5), 16) / 255;
-    const b = parseInt(hex.slice(5, 7), 16) / 255;
-    return [r, g, b];
-  }
-  
-  // Initialize colors
-  let particleColor = hexToRgb(particleColorInput.value);
-  let startColor = hexToRgb(startColorInput.value);
-  let endColor = hexToRgb(endColorInput.value);
-
-  // UI event listeners
-  lifetimeSlider.addEventListener('input', () => {
-    const value = lifetimeSlider.value;
-    lifetimeValue.textContent = `${value} sec`;
-  });
-  
-  emissionDurationSlider.addEventListener('input', () => {
-    const value = emissionDurationSlider.value;
-    emissionDurationValue.textContent = `${value} sec`;
-    emissionDuration = parseFloat(value);
-  });
-  
-  emissionRateSlider.addEventListener('input', () => {
-    const value = emissionRateSlider.value;
-    emissionRateValue.textContent = `${value} particles/sec`;
-    emissionRate = parseFloat(value);
-  });
-  
-  fadeCheckbox.addEventListener('change', () => {
-    fadeEnabled = fadeCheckbox.checked;
-    // Update uniform buffer instead of recreating shader
-    updateAppearanceUniform();
-  });
-  
-  colorTransitionCheckbox.addEventListener('change', () => {
-    colorTransitionEnabled = colorTransitionCheckbox.checked;
-    
-    if (colorTransitionEnabled) {
-      singleColorContainer.classList.add('hidden');
-      gradientColorContainer.classList.remove('hidden');
-    } else {
-      singleColorContainer.classList.remove('hidden');
-      gradientColorContainer.classList.add('hidden');
-    }
-    
-    // Update uniform buffer instead of recreating shader
-    updateAppearanceUniform();
-  });
-  
-  // Color input event listeners
-  particleColorInput.addEventListener('input', () => {
-    particleColor = hexToRgb(particleColorInput.value);
-    // Update uniform buffer instead of recreating shader
-    updateAppearanceUniform();
-    // Apply color to existing particles
-    updateParticleColors();
-  });
-  
-  startColorInput.addEventListener('input', () => {
-    startColor = hexToRgb(startColorInput.value);
-    // Update uniform buffer instead of recreating shader
-    updateAppearanceUniform();
-    // Apply color to existing particles
-    updateParticleColors();
-  });
-  
-  endColorInput.addEventListener('input', () => {
-    endColor = hexToRgb(endColorInput.value);
-    // Update uniform buffer instead of recreating shader
-    updateAppearanceUniform();
-    // Apply color to existing particles
-    updateParticleColors();
-  });
-  
-  // Update size value display when slider changes
-  sizeSlider.addEventListener('input', () => {
-    const value = sizeSlider.value;
-    sizeValue.textContent = value;
-    particleSize = parseFloat(value);
-    
-    // Update appearance uniform buffer instead of recreating shader
-    updateAppearanceUniform();
-    
-    // We still need to update the quad geometry
-    updateQuadGeometry(particleSize);
-  });
-  
-  // Update speed value display when slider changes
-  speedSlider.addEventListener('input', () => {
-    const value = speedSlider.value;
-    speedValue.textContent = value;
-    particleSpeed = parseFloat(value);
-    
-    // No need to recreate shader, just update velocity for existing particles
-    updateParticleVelocities();
-  });
-  
-  // Update particle count slider
-  particleCountSlider.addEventListener('input', () => {
-    const value = particleCountSlider.value;
-    particleCountValue.textContent = value;
-    particleCount = parseInt(value);
-  });
-  
-  // Toggle between continuous and burst mode
-  burstCheckbox.addEventListener('change', () => {
-    burstMode = burstCheckbox.checked;
-    
-    if (burstMode) {
-      continuousEmissionContainer.classList.add('hidden');
-      burstEmissionContainer.classList.remove('hidden');
-    } else {
-      continuousEmissionContainer.classList.remove('hidden');
-      burstEmissionContainer.classList.add('hidden');
-    }
-  });
-  
-  // Emission shape event listeners
-  emissionShapeSelect.addEventListener('change', () => {
-    emissionShape = emissionShapeSelect.value;
-    
-    if (emissionShape === 'cube') {
-      cubeSettings.classList.remove('hidden');
-      sphereSettings.classList.add('hidden');
-    } else if (emissionShape === 'sphere') {
-      cubeSettings.classList.add('hidden');
-      sphereSettings.classList.remove('hidden');
-    }
-  });
-  
-  // Cube length slider
-  cubeLengthSlider.addEventListener('input', () => {
-    const value = cubeLengthSlider.value;
-    cubeLengthValue.textContent = value;
-    cubeLength = parseFloat(value);
-  });
-  
-  // Inner radius slider
-  innerRadiusSlider.addEventListener('input', () => {
-    const value = innerRadiusSlider.value;
-    innerRadiusValue.textContent = value;
-    innerRadius = parseFloat(value);
-    
-    // Make sure inner radius is less than outer radius
-    if (innerRadius >= outerRadius) {
-      outerRadiusSlider.value = innerRadius + 0.1;
-      outerRadiusValue.textContent = outerRadiusSlider.value;
-      outerRadius = parseFloat(outerRadiusSlider.value);
-    }
-  });
-  
-  // Outer radius slider
-  outerRadiusSlider.addEventListener('input', () => {
-    const value = outerRadiusSlider.value;
-    outerRadiusValue.textContent = value;
-    outerRadius = parseFloat(value);
-    
-    // Make sure outer radius is greater than inner radius
-    if (outerRadius <= innerRadius) {
-      innerRadiusSlider.value = outerRadius - 0.1;
-      innerRadiusValue.textContent = innerRadiusSlider.value;
-      innerRadius = parseFloat(innerRadiusSlider.value);
-    }
-  });
-  
-  // Bloom effect controls
-  bloomCheckbox.addEventListener('change', () => {
-    bloomEnabled = bloomCheckbox.checked;
-    
-    // Show/hide the bloom intensity slider based on bloom enabled state
-    if (bloomEnabled) {
-      bloomIntensityContainer.classList.remove('hidden');
-    } else {
-      bloomIntensityContainer.classList.add('hidden');
-    }
-  });
-  
-  bloomIntensitySlider.addEventListener('input', () => {
-    bloomIntensity = parseFloat(bloomIntensitySlider.value);
-    bloomIntensityValue.textContent = bloomIntensity.toFixed(1);
-    
-    // Update the bloom intensity in the composite shader
-    updateBloomIntensity();
-  });
-  
-  // Function to update bloom intensity
-  function updateBloomIntensity() {
-    // Update the bloom intensity uniform buffer with the new value
-    const bloomIntensityData = new Float32Array(16).fill(0); // Initialize all to 0
-    bloomIntensityData[0] = bloomIntensity; // Set the intensity value
-    device.queue.writeBuffer(bloomIntensityBuffer, 0, bloomIntensityData);
-  }
-  
-  // Initialize bloom UI based on initial state
-  bloomCheckbox.checked = bloomEnabled;
-  bloomIntensitySlider.value = bloomIntensity;
-  bloomIntensityValue.textContent = bloomIntensity.toFixed(1);
-  
-  if (bloomEnabled) {
-    bloomIntensityContainer.classList.remove('hidden');
-  } else {
-    bloomIntensityContainer.classList.add('hidden');
-  }
-  
-  // Initialize emission shape UI
-  emissionShapeSelect.value = emissionShape;
-  cubeLengthValue.textContent = cubeLengthSlider.value;
-  innerRadiusValue.textContent = innerRadiusSlider.value;
-  outerRadiusValue.textContent = outerRadiusSlider.value;
-  
-  // Initialize UI based on initial burst mode state
-  burstCheckbox.checked = burstMode;
-  if (burstMode) {
-    continuousEmissionContainer.classList.add('hidden');
-    burstEmissionContainer.classList.remove('hidden');
-  } else {
-    continuousEmissionContainer.classList.remove('hidden');
-    burstEmissionContainer.classList.add('hidden');
-  }
-  
-  // Create shader and pipeline based on current settings
-  function createShaderAndPipeline() {
-    const shaderModule = device.createShaderModule({
-      code: `
-        struct Uniforms {
-          transform: mat4x4<f32>,
-          cameraPosition: vec3<f32>,
-          aspectRatio: f32,
-        }
-
-        struct AppearanceUniforms {
-          fadeEnabled: f32,
-          colorTransitionEnabled: f32,
-          particleSize: f32,
-          padding: f32,
-          singleColor: vec3<f32>,
-          padding2: f32,
-          startColor: vec3<f32>,
-          padding3: f32,
-          endColor: vec3<f32>,
-          padding4: f32,
-        }
-
-        @binding(0) @group(0) var<uniform> uniforms : Uniforms;
-        @binding(1) @group(0) var<uniform> appearance : AppearanceUniforms;
-
-        struct VertexInput {
-          @location(0) position : vec3<f32>,
-          @location(1) particlePosition : vec3<f32>,
-          @location(2) particleColor : vec3<f32>,
-          @location(3) particleAgeAndLife : vec2<f32>,
-        }
-
-        struct VertexOutput {
-          @builtin(position) position : vec4<f32>,
-          @location(0) color : vec3<f32>,
-          @location(1) alpha : f32,
-        }
-
-        @vertex
-        fn vs_main(input: VertexInput) -> VertexOutput {
-          var output : VertexOutput;
-          
-          let center = input.particlePosition;
-          let baseColor = input.particleColor;
-          let age = input.particleAgeAndLife.x;
-          let lifetime = input.particleAgeAndLife.y;
-          let lifeRatio = age / lifetime;
-          
-          // Calculate color based on settings
-          var finalColor = baseColor;
-          
-          if (appearance.colorTransitionEnabled > 0.5) {
-            finalColor = mix(appearance.startColor, appearance.endColor, lifeRatio);
-          } else {
-            finalColor = appearance.singleColor;
-          }
-          
-          // Calculate alpha based on lifetime
-          var alpha = 0.0;
-          if (appearance.fadeEnabled > 0.5) {
-            alpha = max(0.0, 1.0 - lifeRatio);
-          } else {
-            alpha = select(0.0, 1.0, age < lifetime);
-          }
-          
-          // Transform to view space
-          let viewCenter = uniforms.transform * vec4<f32>(center, 1.0);
-          
-          // Distance-based size scaling with particle size factor
-          let cameraToParticle = length(center - uniforms.cameraPosition);
-          let baseScaleFactor = 0.15 * appearance.particleSize; // Apply the size from uniform
-          let distanceScaleFactor = baseScaleFactor * (10.0 / cameraToParticle);
-          
-          // Apply billboard technique
-          let finalPosition = vec4<f32>(
-            viewCenter.x + input.position.x * distanceScaleFactor * uniforms.aspectRatio * viewCenter.w,
-            viewCenter.y + input.position.y * distanceScaleFactor * viewCenter.w,
-            viewCenter.z,
-            viewCenter.w
-          );
-          
-          output.position = finalPosition;
-          output.color = finalColor;
-          output.alpha = alpha;
-          return output;
-        }
-
-        @fragment
-        fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-          // Return the particle color with its alpha
-          return vec4<f32>(input.color, input.alpha);
-        }
-      `,
-    });
-
-    // Create pipeline with instanced rendering
-    pipeline = device.createRenderPipeline({
-      layout: pipelineLayout,
-      vertex: {
-        module: shaderModule,
-        entryPoint: 'vs_main',
-        buffers: [
-          {
-            arrayStride: 3 * 4,
-            stepMode: 'vertex',
-            attributes: [
-              {
-                shaderLocation: 0,
-                offset: 0,
-                format: 'float32x3',
-              }
-            ],
-          },
-          {
-            arrayStride: 8 * 4,
-            stepMode: 'instance',
-            attributes: [
-              {
-                shaderLocation: 1,
-                offset: 0,
-                format: 'float32x3',
-              },
-              {
-                shaderLocation: 2,
-                offset: 3 * 4,
-                format: 'float32x3',
-              },
-              {
-                shaderLocation: 3,
-                offset: 6 * 4,
-                format: 'float32x2',
-              }
-            ],
-          }
-        ],
-      },
-      fragment: {
-        module: shaderModule,
-        entryPoint: 'fs_main',
-        targets: [{
-          format: format,
-          blend: {
-            color: {
-              srcFactor: 'src-alpha',
-              dstFactor: 'one-minus-src-alpha',
-              operation: 'add',
-            },
-            alpha: {
-              srcFactor: 'one',
-              dstFactor: 'one-minus-src-alpha',
-              operation: 'add',
-            },
-          },
-        }],
-      },
-      primitive: {
-        topology: 'triangle-list',
-        cullMode: 'none',
-      },
-      depthStencil: {
-        depthWriteEnabled: true,
-        depthCompare: 'less',
-        format: 'depth24plus',
-      },
-    });
-  }
-  
-  // Button event handlers
-  const respawnButton = document.getElementById('respawn-button');
-  respawnButton.addEventListener('click', () => {
-    spawnParticles();
-  });
-  
-  // Camera control event listeners
-  canvas.addEventListener('mousedown', (e) => {
-    isDragging = true;
-    lastMouseX = e.clientX;
-    lastMouseY = e.clientY;
-  });
-  
-  window.addEventListener('mouseup', () => {
-    isDragging = false;
-  });
-  
-  window.addEventListener('mousemove', (e) => {
-    if (isDragging) {
-      const deltaX = e.clientX - lastMouseX;
-      const deltaY = e.clientY - lastMouseY;
-      
-      cameraRotationY -= deltaX * rotationSpeed;
-      cameraRotationX += deltaY * rotationSpeed;
-      
-      // Limit vertical rotation to prevent flipping
-      cameraRotationX = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, cameraRotationX));
-      
-      lastMouseX = e.clientX;
-      lastMouseY = e.clientY;
-    }
-  });
-  
-  // Zoom control
-  canvas.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    
-    const zoomAmount = e.deltaY * 0.01;
-    cameraDistance = Math.max(minZoom, Math.min(maxZoom, cameraDistance + zoomAmount));
-  }, { passive: false }); // Set passive to false explicitly to handle preventDefault
-  
-  // Set up geometry for instanced rendering
+  // Create quad geometry for billboards
   const quadVertices = new Float32Array([
-    -size, -size, 0,
-    size, -size, 0,
-    size, size, 0,
-    -size, size, 0
+    -config.particleSize, -config.particleSize, 0,
+    config.particleSize, -config.particleSize, 0,
+    config.particleSize, config.particleSize, 0,
+    -config.particleSize, config.particleSize, 0
   ]);
   
   const quadIndices = new Uint16Array([
@@ -700,250 +84,29 @@ async function main() {
   ]);
   
   // Create buffers
-  const quadVertexBuffer = device.createBuffer({
-    size: quadVertices.byteLength,
-    usage: GPUBufferUsage.VERTEX,
-    mappedAtCreation: true,
-  });
-  new Float32Array(quadVertexBuffer.getMappedRange()).set(quadVertices);
-  quadVertexBuffer.unmap();
+  const quadVertexBuffer = createBuffer(
+    device, 
+    quadVertices, 
+    GPUBufferUsage.VERTEX
+  );
   
-  const quadIndexBuffer = device.createBuffer({
-    size: quadIndices.byteLength,
-    usage: GPUBufferUsage.INDEX,
-    mappedAtCreation: true,
-  });
-  new Uint16Array(quadIndexBuffer.getMappedRange()).set(quadIndices);
-  quadIndexBuffer.unmap();
-  
-  const instanceBuffer = device.createBuffer({
-    size: MAX_PARTICLES * 8 * 4,
-    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-  });
+  const quadIndexBuffer = createBuffer(
+    device, 
+    quadIndices, 
+    GPUBufferUsage.INDEX
+  );
   
   const uniformBuffer = device.createBuffer({
     size: 80, // MVP matrix + camera position + aspect
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   
-  // Spawn particles
-  function spawnParticles() {
-    // Reset counters
-    activeParticles = 0;
-    currentEmissionTime = 0;
-    emissionTimer = 0;
-    
-    if (burstMode) {
-      // Burst mode: emit all particles at once
-      const burstCount = particleCount;
-      
-      // Emit all particles immediately
-      for (let i = 0; i < burstCount; i++) {
-        emitParticle();
-      }
-      
-      // No need to continue emitting
-      emitting = false;
-    } else {
-      // Continuous emission mode
-      emitting = true;
-      
-      // Calculate max particles based on emission rate and duration
-      const baseLifetime = parseFloat(lifetimeSlider.value);
-      const effectiveDuration = Math.min(emissionDuration, baseLifetime);
-      particleCount = Math.min(Math.ceil(emissionRate * effectiveDuration), MAX_PARTICLES);
-    }
-  }
-  
-  // Emit a single particle
-  function emitParticle() {
-    if (activeParticles >= particleCount) return false;
-    
-    const index = activeParticles * 8;
-    let posX, posY, posZ;
-    
-    if (emissionShape === 'cube') {
-      // Generate random position within a cube
-      const halfLength = cubeLength / 2;
-      posX = (Math.random() - 0.5) * cubeLength;
-      posY = (Math.random() - 0.5) * cubeLength;
-      posZ = (Math.random() - 0.5) * cubeLength;
-    } else if (emissionShape === 'sphere') {
-      // Generate random position within a sphere shell (between inner and outer radius)
-      // First generate random direction (uniform distribution on sphere)
-      let theta = Math.random() * 2 * Math.PI; // azimuthal angle
-      let phi = Math.acos(2 * Math.random() - 1); // polar angle
-      
-      // Calculate direction vector
-      let dirX = Math.sin(phi) * Math.cos(theta);
-      let dirY = Math.sin(phi) * Math.sin(theta);
-      let dirZ = Math.cos(phi);
-      
-      // Generate random radius between inner and outer
-      let radius;
-      if (innerRadius === 0) {
-        // For solid sphere, use cubic distribution for uniform volume distribution
-        radius = outerRadius * Math.cbrt(Math.random());
-      } else {
-        // For shell, interpolate between inner and outer
-        radius = innerRadius + (outerRadius - innerRadius) * Math.random();
-      }
-      
-      // Calculate position
-      posX = dirX * radius;
-      posY = dirY * radius;
-      posZ = dirZ * radius;
-    }
-    
-    // Normalize to get direction vector from origin
-    const length = Math.sqrt(posX * posX + posY * posY + posZ * posZ) || 0.0001; // Avoid division by zero
-    const dirX = posX / length;
-    const dirY = posY / length;
-    const dirZ = posZ / length;
-    
-    // Set position
-    particleData[index] = posX;
-    particleData[index + 1] = posY;
-    particleData[index + 2] = posZ;
-    
-    // Store velocity vector for this particle (scaled by speed)
-    const velIndex = activeParticles * 3;
-    particleVelocities[velIndex] = dirX * particleSpeed;
-    particleVelocities[velIndex + 1] = dirY * particleSpeed;
-    particleVelocities[velIndex + 2] = dirZ * particleSpeed;
-    
-    // Color
-    if (colorTransitionEnabled) {
-      particleData[index + 3] = startColor[0];
-      particleData[index + 4] = startColor[1];
-      particleData[index + 5] = startColor[2];
-    } else {
-      particleData[index + 3] = particleColor[0];
-      particleData[index + 4] = particleColor[1];
-      particleData[index + 5] = particleColor[2];
-    }
-    
-    // Age and lifetime - set a lifetime from the slider
-    const baseLifetime = parseFloat(lifetimeSlider.value);
-    particleData[index + 6] = 0; // Age starts at 0
-    particleData[index + 7] = baseLifetime + Math.random() * 2 - 1; // Add a small random variance
-    
-    activeParticles++;
-    return true;
-  }
-  
-  // Update particles
-  function updateBuffers() {
-    let newActiveCount = 0;
-    for (let i = 0; i < activeParticles; i++) {
-      const age = particleData[i * 8 + 6];
-      const lifetime = particleData[i * 8 + 7];
-      
-      if (age >= lifetime) continue;
-      
-      if (newActiveCount !== i) {
-        // Copy particle data
-        for (let j = 0; j < 8; j++) {
-          particleData[newActiveCount * 8 + j] = particleData[i * 8 + j];
-        }
-        
-        // Also copy the velocity data to keep arrays in sync
-        for (let j = 0; j < 3; j++) {
-          particleVelocities[newActiveCount * 3 + j] = particleVelocities[i * 3 + j];
-        }
-      }
-      newActiveCount++;
-    }
-    activeParticles = newActiveCount;
-    
-    device.queue.writeBuffer(instanceBuffer, 0, particleData, 0, activeParticles * 8 * 4);
-  }
-  
-  // Function to update colors of existing particles
-  function updateParticleColors() {
-    for (let i = 0; i < activeParticles; i++) {
-      const index = i * 8;
-      
-      // Update color based on current settings
-      if (colorTransitionEnabled) {
-        particleData[index + 3] = startColor[0];
-        particleData[index + 4] = startColor[1];
-        particleData[index + 5] = startColor[2];
-      } else {
-        particleData[index + 3] = particleColor[0];
-        particleData[index + 4] = particleColor[1];
-        particleData[index + 5] = particleColor[2];
-      }
-    }
-    
-    // Update the buffer with the new colors
-    if (activeParticles > 0) {
-      device.queue.writeBuffer(instanceBuffer, 0, particleData, 0, activeParticles * 8 * 4);
-    }
-  }
-  
-  // Function to update velocity of existing particles
-  function updateParticleVelocities() {
-    for (let i = 0; i < activeParticles; i++) {
-      const index = i * 8; // Position data index
-      const velIndex = i * 3; // Velocity data index
-      
-      // Get the current position
-      const posX = particleData[index];
-      const posY = particleData[index + 1];
-      const posZ = particleData[index + 2];
-      
-      // Calculate direction away from origin (normalize the position vector)
-      const length = Math.sqrt(posX * posX + posY * posY + posZ * posZ) || 0.0001; // Avoid division by zero
-      const dirX = posX / length;
-      const dirY = posY / length;
-      const dirZ = posZ / length;
-      
-      // Update velocity in the direction away from origin based on current speed setting
-      particleVelocities[velIndex] = dirX * particleSpeed;
-      particleVelocities[velIndex + 1] = dirY * particleSpeed;
-      particleVelocities[velIndex + 2] = dirZ * particleSpeed;
-    }
-  }
-
-  // Create pipeline layout
-  const bindGroupLayout = device.createBindGroupLayout({
-    entries: [
-      {
-        binding: 0,
-        visibility: GPUShaderStage.VERTEX,
-        buffer: { type: 'uniform' }
-      },
-      {
-        binding: 1,
-        visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-        buffer: { type: 'uniform' }
-      }
-    ],
+  const appearanceUniformBuffer = device.createBuffer({
+    size: 64, // [fadeEnabled, colorTransitionEnabled, particleSize, padding, colors...]
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
-
-  // Create bloom-related bind group layouts and pipelines
-  const bloomBindGroupLayout = device.createBindGroupLayout({
-    entries: [
-      {
-        binding: 0,
-        visibility: GPUShaderStage.FRAGMENT,
-        sampler: {}
-      },
-      {
-        binding: 1,
-        visibility: GPUShaderStage.FRAGMENT,
-        texture: {}
-      },
-      {
-        binding: 2,
-        visibility: GPUShaderStage.FRAGMENT,
-        buffer: { type: 'uniform' }
-      }
-    ]
-  });
-
-  // Create bloom uniforms (separate buffers for horizontal and vertical blur)
+  
+  // Create bloom-related buffers
   const horizontalBlurUniformBuffer = device.createBuffer({
     size: 32, // direction (vec2) + resolution (vec2) + padding
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -954,508 +117,81 @@ async function main() {
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   
-  // Pre-fill the buffers with their respective direction values
-  const horizontalDirection = new Float32Array([1.0, 0.0, canvas.width, canvas.height, 0.0, 0.0, 0.0, 0.0]);
-  const verticalDirection = new Float32Array([0.0, 1.0, canvas.width, canvas.height, 0.0, 0.0, 0.0, 0.0]);
-  
-  device.queue.writeBuffer(horizontalBlurUniformBuffer, 0, horizontalDirection);
-  device.queue.writeBuffer(verticalBlurUniformBuffer, 0, verticalDirection);
-
-  // Create a high-quality sampler for texture filtering
-  const sampler = device.createSampler({
-    magFilter: 'linear',
-    minFilter: 'linear',
-    mipmapFilter: 'linear',
-    addressModeU: 'clamp-to-edge',
-    addressModeV: 'clamp-to-edge',
-    maxAnisotropy: 16 // Higher anisotropy for better quality
-  });
-
-  // Replace the blur shader module with this improved version
-  const blurShaderModule = device.createShaderModule({
-    code: `
-      struct BloomUniforms {
-        direction: vec2<f32>,
-        resolution: vec2<f32>,
-        padding: vec2<f32>,
-      }
-
-      @binding(0) @group(0) var texSampler: sampler;
-      @binding(1) @group(0) var inputTexture: texture_2d<f32>;
-      @binding(2) @group(0) var<uniform> uniforms: BloomUniforms;
-
-      struct VertexOutput {
-        @builtin(position) position: vec4<f32>,
-        @location(0) texCoord: vec2<f32>,
-      }
-
-      @vertex
-      fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
-        var output: VertexOutput;
-        
-        // Generate fullscreen triangle
-        let positions = array<vec2<f32>, 3>(
-          vec2<f32>(-1.0, -1.0),
-          vec2<f32>(3.0, -1.0),
-          vec2<f32>(-1.0, 3.0)
-        );
-        
-        let texCoords = array<vec2<f32>, 3>(
-          vec2<f32>(0.0, 1.0),
-          vec2<f32>(2.0, 1.0),
-          vec2<f32>(0.0, -1.0)
-        );
-        
-        output.position = vec4<f32>(positions[vertexIndex], 0.0, 1.0);
-        output.texCoord = texCoords[vertexIndex];
-        return output;
-      }
-
-      @fragment
-      fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-        // Create a high-quality Gaussian blur with more samples
-        let pixelSize = 1.0 / uniforms.resolution;
-        
-        // Using 15 samples for a much smoother blur
-        var result = vec4<f32>(0.0);
-        var totalWeight = 0.0;
-        
-        // True Gaussian weights for 15 samples
-        let weights = array<f32, 15>(
-          0.0045, 0.0154, 0.0383, 0.0703, 0.1055, 0.1308, 0.1333,  // first 7 weights
-          0.1124,                                                   // center weight
-          0.1333, 0.1308, 0.1055, 0.0703, 0.0383, 0.0154, 0.0045   // last 7 weights
-        );
-        
-        // Sample at fractional pixel offsets for smoother interpolation
-        for (var i = -7; i <= 7; i++) {
-          let offset = uniforms.direction * (f32(i) * pixelSize * 2);
-          let weight = weights[i + 7];
-          
-          result += textureSample(inputTexture, texSampler, input.texCoord + offset) * weight;
-          totalWeight += weight;
-        }
-        
-        // Normalize the result and apply a slight intensity boost
-        return result / totalWeight * 1.1;
-      }
-    `,
-  });
-
-  // Update the composite shader module to use a uniform for bloom intensity
-  const compositeShaderModule = device.createShaderModule({
-    code: `
-      struct BloomIntensityUniforms {
-        intensity: f32,
-        padding: vec3<f32>,
-      }
-
-      @binding(0) @group(0) var texSampler: sampler;
-      @binding(1) @group(0) var originalTexture: texture_2d<f32>;
-      @binding(2) @group(0) var blurredTexture: texture_2d<f32>;
-      @binding(3) @group(0) var<uniform> bloomUniforms: BloomIntensityUniforms;
-
-      struct VertexOutput {
-        @builtin(position) position: vec4<f32>,
-        @location(0) texCoord: vec2<f32>,
-      }
-
-      @vertex
-      fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
-        var output: VertexOutput;
-        
-        // Generate fullscreen triangle
-        let positions = array<vec2<f32>, 3>(
-          vec2<f32>(-1.0, -1.0),
-          vec2<f32>(3.0, -1.0),
-          vec2<f32>(-1.0, 3.0)
-        );
-        
-        let texCoords = array<vec2<f32>, 3>(
-          vec2<f32>(0.0, 1.0),
-          vec2<f32>(2.0, 1.0),
-          vec2<f32>(0.0, -1.0)
-        );
-        
-        output.position = vec4<f32>(positions[vertexIndex], 0.0, 1.0);
-        output.texCoord = texCoords[vertexIndex];
-        return output;
-      }
-
-      @fragment
-      fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-        let originalColor = textureSample(originalTexture, texSampler, input.texCoord);
-        let bloomColor = textureSample(blurredTexture, texSampler, input.texCoord);
-        
-        // Apply a subtle curve to make the bloom smoother
-        let mappedBloom = pow(bloomColor.rgb, vec3<f32>(0.85));
-        
-        // Use the bloom intensity from uniform buffer
-        return vec4<f32>(originalColor.rgb + (mappedBloom * bloomUniforms.intensity), originalColor.a);
-      }
-    `,
-  });
-
-  // Create bloom pipeline layouts
-  const blurPipelineLayout = device.createPipelineLayout({
-    bindGroupLayouts: [bloomBindGroupLayout]
-  });
-
-  // Create composite bind group layout without uniform buffer
-  const compositeBindGroupLayout = device.createBindGroupLayout({
-    entries: [
-      {
-        binding: 0,
-        visibility: GPUShaderStage.FRAGMENT,
-        sampler: {}
-      },
-      {
-        binding: 1,
-        visibility: GPUShaderStage.FRAGMENT,
-        texture: {}
-      },
-      {
-        binding: 2,
-        visibility: GPUShaderStage.FRAGMENT,
-        texture: {}
-      },
-      {
-        binding: 3,
-        visibility: GPUShaderStage.FRAGMENT,
-        buffer: { type: 'uniform' }
-      }
-    ]
-  });
-
-  const compositePipelineLayout = device.createPipelineLayout({
-    bindGroupLayouts: [compositeBindGroupLayout]
-  });
-
-  // Create bloom intensity uniform buffer
   const bloomIntensityBuffer = device.createBuffer({
-    size: 64, // Increase to 64 bytes to ensure we have enough space
+    size: 64, // intensity (f32) + padding
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   
-  // Fill with bloomIntensity and padding to fill 64 bytes (16 floats)
-  const bloomIntensityData = new Float32Array(16).fill(0); // Initialize all to 0
-  bloomIntensityData[0] = BLOOM_INTENSITY; // Only the first value is used
+  // Initialize buffer data
+  const horizontalDirection = new Float32Array([1.0, 0.0, canvas.width, canvas.height, 0.0, 0.0, 0.0, 0.0]);
+  const verticalDirection = new Float32Array([0.0, 1.0, canvas.width, canvas.height, 0.0, 0.0, 0.0, 0.0]);
+  const bloomIntensityData = new Float32Array(16).fill(0);
+  bloomIntensityData[0] = config.bloomIntensity;
+  
+  device.queue.writeBuffer(horizontalBlurUniformBuffer, 0, horizontalDirection);
+  device.queue.writeBuffer(verticalBlurUniformBuffer, 0, verticalDirection);
   device.queue.writeBuffer(bloomIntensityBuffer, 0, bloomIntensityData);
-
-  // Create blur pipeline
-  const blurPipeline = device.createRenderPipeline({
-    layout: blurPipelineLayout,
-    vertex: {
-      module: blurShaderModule,
-      entryPoint: 'vs_main',
-    },
-    fragment: {
-      module: blurShaderModule,
-      entryPoint: 'fs_main',
-      targets: [{
-        format: format,
-        // Remove the blend settings to prevent alpha issues during blur
-        // This ensures full-intensity blur information is preserved
-      }],
-    },
-    primitive: {
-      topology: 'triangle-list',
-    },
-  });
-
-  // Create composite pipeline
-  const compositePipeline = device.createRenderPipeline({
-    layout: compositePipelineLayout,
-    vertex: {
-      module: compositeShaderModule,
-      entryPoint: 'vs_main',
-    },
-    fragment: {
-      module: compositeShaderModule,
-      entryPoint: 'fs_main',
-      targets: [{
-        format: format,
-        blend: {
-          color: {
-            srcFactor: 'one',
-            dstFactor: 'one-minus-src-alpha',
-            operation: 'add',
-          },
-          alpha: {
-            srcFactor: 'one',
-            dstFactor: 'one-minus-src-alpha',
-            operation: 'add',
-          },
-        },
-      }],
-    },
-    primitive: {
-      topology: 'triangle-list',
-    },
-  });
-
-  // Create horizontal and vertical blur bind groups
-  let horizontalBlurBindGroup = device.createBindGroup({
-    layout: bloomBindGroupLayout,
-    entries: [
-      {
-        binding: 0,
-        resource: sampler,
-      },
-      {
-        binding: 1,
-        resource: sceneTexture.createView(),
-      },
-      {
-        binding: 2,
-        resource: { buffer: horizontalBlurUniformBuffer },
-      }
-    ],
-  });
-
-  let verticalBlurBindGroup = device.createBindGroup({
-    layout: bloomBindGroupLayout,
-    entries: [
-      {
-        binding: 0,
-        resource: sampler,
-      },
-      {
-        binding: 1,
-        resource: bloomTexA.createView(),
-      },
-      {
-        binding: 2,
-        resource: { buffer: verticalBlurUniformBuffer },
-      }
-    ],
-  });
-
-  // Final composite bind group
-  let compositeBindGroup = device.createBindGroup({
-    layout: compositeBindGroupLayout,
-    entries: [
-      {
-        binding: 0,
-        resource: sampler,
-      },
-      {
-        binding: 1,
-        resource: sceneTexture.createView(),
-      },
-      {
-        binding: 2,
-        resource: bloomTexB.createView(),
-      },
-      {
-        binding: 3,
-        resource: { buffer: bloomIntensityBuffer },
-      }
-    ],
-  });
-
-  // Create a direct render shader for when bloom is disabled
-  const directRenderShaderModule = device.createShaderModule({
-    code: `
-      struct BloomIntensityUniforms {
-        intensity: f32,
-        padding: vec3<f32>,
-      }
-
-      @binding(0) @group(0) var texSampler: sampler;
-      @binding(1) @group(0) var originalTexture: texture_2d<f32>;
-      @binding(2) @group(0) var blurredTexture: texture_2d<f32>; // Not used but kept for layout compatibility
-      @binding(3) @group(0) var<uniform> bloomUniforms: BloomIntensityUniforms; // Not used but needed for layout compatibility
-
-      struct VertexOutput {
-        @builtin(position) position: vec4<f32>,
-        @location(0) texCoord: vec2<f32>,
-      }
-
-      @vertex
-      fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
-        var output: VertexOutput;
-        
-        // Generate fullscreen triangle
-        let positions = array<vec2<f32>, 3>(
-          vec2<f32>(-1.0, -1.0),
-          vec2<f32>(3.0, -1.0),
-          vec2<f32>(-1.0, 3.0)
-        );
-        
-        let texCoords = array<vec2<f32>, 3>(
-          vec2<f32>(0.0, 1.0),
-          vec2<f32>(2.0, 1.0),
-          vec2<f32>(0.0, -1.0)
-        );
-        
-        output.position = vec4<f32>(positions[vertexIndex], 0.0, 1.0);
-        output.texCoord = texCoords[vertexIndex];
-        return output;
-      }
-
-      @fragment
-      fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-        // Simply render the original texture without any bloom
-        return textureSample(originalTexture, texSampler, input.texCoord);
-      }
-    `,
-  });
-
-  // Create direct render pipeline (used when bloom is disabled)
-  const directRenderPipeline = device.createRenderPipeline({
-    layout: compositePipelineLayout,
-    vertex: {
-      module: directRenderShaderModule,
-      entryPoint: 'vs_main',
-    },
-    fragment: {
-      module: directRenderShaderModule,
-      entryPoint: 'fs_main',
-      targets: [{
-        format: format,
-        blend: {
-          color: {
-            srcFactor: 'one',
-            dstFactor: 'one-minus-src-alpha',
-            operation: 'add',
-          },
-          alpha: {
-            srcFactor: 'one',
-            dstFactor: 'one-minus-src-alpha',
-            operation: 'add',
-          },
-        },
-      }],
-    },
-    primitive: {
-      topology: 'triangle-list',
-    },
-  });
-
-  // Binding group for direct rendering (without bloom)
-  let directRenderBindGroup = device.createBindGroup({
-    layout: compositeBindGroupLayout,
-    entries: [
-      {
-        binding: 0,
-        resource: sampler,
-      },
-      {
-        binding: 1,
-        resource: sceneTexture.createView(),
-      },
-      {
-        binding: 2, // Not used but needed for layout compatibility
-        resource: bloomTexB.createView(),
-      },
-      {
-        binding: 3, // Add bloom intensity buffer even though it won't be used
-        resource: { buffer: bloomIntensityBuffer },
-      }
-    ],
-  });
-
-  const pipelineLayout = device.createPipelineLayout({
-    bindGroupLayouts: [bindGroupLayout],
-  });
-
-  let pipeline;
-  createShaderAndPipeline();
-
-  // Create bind group
-  const bindGroup = device.createBindGroup({
-    layout: bindGroupLayout,
-    entries: [
-      {
-        binding: 0,
-        resource: { buffer: uniformBuffer },
-      },
-      {
-        binding: 1,
-        resource: { buffer: appearanceUniformBuffer },
-      }
-    ],
-  });
-
-  // Create projection matrix
-  function createProjectionMatrix(aspect) {
-    const fov = Math.PI / 4;
-    const near = 0.1;
-    const far = 100.0;
-    
-    const f = 1.0 / Math.tan(fov / 2);
-    
-    return new Float32Array([
-      f * aspect, 0, 0, 0,
-      0, f, 0, 0,
-      0, 0, (far + near) / (near - far), -1,
-      0, 0, (2 * far * near) / (near - far), 0,
-    ]);
-  }
-
+  
+  // Create high-quality sampler
+  const sampler = createSampler(device);
+  
+  // Create bind group layouts
+  const layouts = createBindGroupLayouts(device);
+  
+  // Create render pipelines
+  const {
+    particlePipeline,
+    blurPipeline,
+    compositePipeline,
+    directRenderPipeline
+  } = createRenderPipelines(device, format, layouts);
+  
+  // Create particle system
+  const particleSystem = new ParticleSystem(device, config);
+  
+  // Create bind groups
+  const buffers = {
+    uniformBuffer,
+    appearanceUniformBuffer,
+    horizontalBlurUniformBuffer,
+    verticalBlurUniformBuffer,
+    bloomIntensityBuffer
+  };
+  
+  const textures = {
+    sceneTexture,
+    bloomTexA,
+    bloomTexB
+  };
+  
+  let bindGroups = createBindGroups(device, sampler, buffers, textures);
+  
+  // Initialize appearance uniform buffer
+  updateAppearanceUniform();
+  
+  // Resize handler for window resizing
+  window.addEventListener('resize', resizeCanvasToDisplaySize);
+  
+  // Initialize particles and start animation
+  spawnParticles();
+  let lastTime = performance.now();
+  requestAnimationFrame(frame);
+  
   // Animation loop
   function frame(currentTime) {
     const deltaTime = (currentTime - lastTime) / 1000;
     lastTime = currentTime;
     
-    // Update particle state (age, position, etc.)
-    if (emitting) {
-      // Update emission timer
-      currentEmissionTime += deltaTime;
-      emissionTimer += deltaTime;
-      
-      // Check if we're still within emission duration
-      if (currentEmissionTime < emissionDuration) {
-        // Calculate how many particles to emit this frame
-        const particlesToEmit = emissionRate * deltaTime;
-        let wholeParticlesToEmit = Math.floor(particlesToEmit);
-        const fractionalPart = particlesToEmit - wholeParticlesToEmit;
-        
-        // Handle fractional particles (probabilistic emission)
-        if (Math.random() < fractionalPart) {
-          wholeParticlesToEmit += 1;
-        }
-        
-        // Emit particles
-        for (let i = 0; i < wholeParticlesToEmit; i++) {
-          emitParticle();
-        }
-      } else if (emitting) {
-        // Stop emitting once duration is reached
-        emitting = false;
-      }
-    }
-    
-    // Update particle positions and ages
-    let needsUpdate = false;
-    for (let i = 0; i < activeParticles; i++) {
-      // Update age
-      particleData[i * 8 + 6] += deltaTime;
-      
-      // Update position based on velocity and deltaTime
-      const velIndex = i * 3;
-      const posIndex = i * 8;
-      
-      // Apply velocity to position
-      particleData[posIndex] += particleVelocities[velIndex] * deltaTime;
-      particleData[posIndex + 1] += particleVelocities[velIndex + 1] * deltaTime;
-      particleData[posIndex + 2] += particleVelocities[velIndex + 2] * deltaTime;
-      
-      needsUpdate = true;
-    }
-    
-    if (needsUpdate) {
-      updateBuffers();
-    }
+    // Update particle state
+    particleSystem.updateParticles(deltaTime);
     
     const aspect = canvas.height / canvas.width;
     const projectionMatrix = createProjectionMatrix(aspect);
     
     // Calculate camera position
-    const cameraX = cameraDistance * Math.sin(cameraRotationY) * Math.cos(cameraRotationX);
-    const cameraY = cameraDistance * Math.sin(cameraRotationX);
-    const cameraZ = cameraDistance * Math.cos(cameraRotationY) * Math.cos(cameraRotationX);
+    const cameraX = config.cameraDistance * Math.sin(config.cameraRotationY) * Math.cos(config.cameraRotationX);
+    const cameraY = config.cameraDistance * Math.sin(config.cameraRotationX);
+    const cameraZ = config.cameraDistance * Math.cos(config.cameraRotationY) * Math.cos(config.cameraRotationX);
     
     const cameraPos = [cameraX, cameraY, cameraZ];
     
@@ -1482,7 +218,7 @@ async function main() {
         view: sceneTexture.createView(),
         loadOp: 'clear',
         storeOp: 'store',
-        clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }, // Clear to transparent black
+        clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
       }],
       depthStencilAttachment: {
         view: depthTexture.createView(),
@@ -1494,23 +230,23 @@ async function main() {
     
     // Render particles to scene texture with transparency
     const scenePassEncoder = commandEncoder.beginRenderPass(sceneRenderPassDescriptor);
-    scenePassEncoder.setPipeline(pipeline);
-    scenePassEncoder.setBindGroup(0, bindGroup);
+    scenePassEncoder.setPipeline(particlePipeline);
+    scenePassEncoder.setBindGroup(0, bindGroups.particleBindGroup);
     
     scenePassEncoder.setVertexBuffer(0, quadVertexBuffer);
-    scenePassEncoder.setVertexBuffer(1, instanceBuffer);
+    scenePassEncoder.setVertexBuffer(1, particleSystem.instanceBuffer);
     scenePassEncoder.setIndexBuffer(quadIndexBuffer, 'uint16');
     
-    if (activeParticles > 0) {
-      scenePassEncoder.drawIndexed(6, activeParticles);
+    if (particleSystem.activeParticles > 0) {
+      scenePassEncoder.drawIndexed(6, particleSystem.activeParticles);
     }
     
     scenePassEncoder.end();
     
-    if (bloomEnabled) {
+    if (config.bloomEnabled) {
       // Apply multiple blur passes for higher quality bloom
       // First ping-pong between textures for multiple passes
-      for (let i = 0; i < 3; i++) { // Increased to 3 passes for higher quality
+      for (let i = 0; i < 3; i++) {
         // 2. Apply horizontal blur from scene texture (or bloomTexB in subsequent passes) to bloomTexA
         const horizontalBlurPassDescriptor = {
           colorAttachments: [{
@@ -1525,9 +261,27 @@ async function main() {
         horizontalBlurPassEncoder.setPipeline(blurPipeline);
         
         // On first pass, use scene texture as input; otherwise use result of previous vertical pass
-        const horizontalBindGroup = i === 0 ? horizontalBlurBindGroup : 
+        const horizontalBindGroup = i === 0 ? bindGroups.horizontalBlurBindGroup : 
           device.createBindGroup({
-            layout: bloomBindGroupLayout,
+            layout: device.createBindGroupLayout({
+              entries: [
+                {
+                  binding: 0,
+                  visibility: GPUShaderStage.FRAGMENT,
+                  sampler: {}
+                },
+                {
+                  binding: 1,
+                  visibility: GPUShaderStage.FRAGMENT,
+                  texture: {}
+                },
+                {
+                  binding: 2,
+                  visibility: GPUShaderStage.FRAGMENT,
+                  buffer: { type: 'uniform' }
+                }
+              ]
+            }),
             entries: [
               { binding: 0, resource: sampler },
               { binding: 1, resource: bloomTexB.createView() },
@@ -1551,7 +305,7 @@ async function main() {
         
         const verticalBlurPassEncoder = commandEncoder.beginRenderPass(verticalBlurPassDescriptor);
         verticalBlurPassEncoder.setPipeline(blurPipeline);
-        verticalBlurPassEncoder.setBindGroup(0, verticalBlurBindGroup);
+        verticalBlurPassEncoder.setBindGroup(0, bindGroups.verticalBlurBindGroup);
         verticalBlurPassEncoder.draw(3);
         verticalBlurPassEncoder.end();
       }
@@ -1563,21 +317,20 @@ async function main() {
         view: context.getCurrentTexture().createView(),
         loadOp: 'clear',
         storeOp: 'store',
-        clearValue: { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }, // Set the background color here
+        clearValue: { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }, // Background color
       }],
     };
     
     const compositePassEncoder = commandEncoder.beginRenderPass(compositePassDescriptor);
     
-    if (bloomEnabled) {
+    if (config.bloomEnabled) {
       // If bloom is enabled, use the composite pipeline to blend original and blurred textures
       compositePassEncoder.setPipeline(compositePipeline);
-      compositePassEncoder.setBindGroup(0, compositeBindGroup);
+      compositePassEncoder.setBindGroup(0, bindGroups.compositeBindGroup);
     } else {
       // If bloom is disabled, render the scene directly to the canvas
-      // Use a special 'direct render' composite shader and bind group
       compositePassEncoder.setPipeline(directRenderPipeline);
-      compositePassEncoder.setBindGroup(0, directRenderBindGroup);
+      compositePassEncoder.setBindGroup(0, bindGroups.directRenderBindGroup);
     }
     
     compositePassEncoder.draw(3);
@@ -1588,61 +341,52 @@ async function main() {
     requestAnimationFrame(frame);
   }
   
-  // Matrix and vector helper functions
-  function createLookAtMatrix(eye, target, up) {
-    const zAxis = normalizeVector([
-      eye[0] - target[0],
-      eye[1] - target[1],
-      eye[2] - target[2]
-    ]);
+  // Function to handle window resize
+  function resizeCanvasToDisplaySize() {
+    // Store old textures
+    const oldSceneTexture = sceneTexture;
+    const oldBloomTexA = bloomTexA;
+    const oldBloomTexB = bloomTexB;
+    const oldDepthTexture = depthTexture;
     
-    const xAxis = normalizeVector(crossProduct(up, zAxis));
-    const yAxis = crossProduct(zAxis, xAxis);
+    // Update canvas size
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
     
-    return new Float32Array([
-      xAxis[0], yAxis[0], zAxis[0], 0,
-      xAxis[1], yAxis[1], zAxis[1], 0,
-      xAxis[2], yAxis[2], zAxis[2], 0,
-      -dotProduct(xAxis, eye), -dotProduct(yAxis, eye), -dotProduct(zAxis, eye), 1
-    ]);
+    // Create new textures with updated size
+    const newTextures = createRenderTextures(device, format, canvas.width, canvas.height);
+    sceneTexture = newTextures.sceneTexture;
+    bloomTexA = newTextures.bloomTexA;
+    bloomTexB = newTextures.bloomTexB;
+    
+    depthTexture = createDepthTexture(device, canvas.width, canvas.height);
+    
+    // Update the blur uniforms with new resolution values
+    const horizontalDirection = new Float32Array([1.0, 0.0, canvas.width, canvas.height, 0.0, 0.0, 0.0, 0.0]);
+    const verticalDirection = new Float32Array([0.0, 1.0, canvas.width, canvas.height, 0.0, 0.0, 0.0, 0.0]);
+    device.queue.writeBuffer(horizontalBlurUniformBuffer, 0, horizontalDirection);
+    device.queue.writeBuffer(verticalBlurUniformBuffer, 0, verticalDirection);
+    
+    // Recreate bind groups with the new textures
+    const textures = {
+      sceneTexture,
+      bloomTexA,
+      bloomTexB
+    };
+    
+    bindGroups = createBindGroups(device, sampler, buffers, textures);
+    
+    // Schedule the old textures for destruction after the current frame completes
+    requestAnimationFrame(() => {
+      oldSceneTexture.destroy();
+      oldBloomTexA.destroy();
+      oldBloomTexB.destroy();
+      oldDepthTexture.destroy();
+    });
   }
   
-  function normalizeVector(v) {
-    const length = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-    return [v[0] / length, v[1] / length, v[2] / length];
-  }
-  
-  function crossProduct(a, b) {
-    return [
-      a[1] * b[2] - a[2] * b[1],
-      a[2] * b[0] - a[0] * b[2],
-      a[0] * b[1] - a[1] * b[0]
-    ];
-  }
-  
-  function dotProduct(a, b) {
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-  }
-  
-  function multiplyMatrices(a, b) {
-    const result = new Float32Array(16);
-    
-    for (let i = 0; i < 4; i++) {
-      for (let j = 0; j < 4; j++) {
-        let sum = 0;
-        for (let k = 0; k < 4; k++) {
-          sum += a[i + k * 4] * b[k + j * 4];
-        }
-        result[i + j * 4] = sum;
-      }
-    }
-    
-    return result;
-  }
-
-  // Update quad geometry with new size
+  // Function to update quad geometry with new size
   function updateQuadGeometry(size) {
-    // Create new vertices with the updated size
     const newQuadVertices = new Float32Array([
       -size, -size, 0,
       size, -size, 0,
@@ -1650,35 +394,49 @@ async function main() {
       -size, size, 0
     ]);
     
-    // Update the vertex buffer with new sized vertices
     device.queue.writeBuffer(quadVertexBuffer, 0, newQuadVertices);
   }
-
+  
   // Function to update appearance settings in the uniform buffer
   function updateAppearanceUniform() {
     const appearanceData = new Float32Array([
-      fadeEnabled ? 1.0 : 0.0,            // fadeEnabled flag
-      colorTransitionEnabled ? 1.0 : 0.0,  // colorTransitionEnabled flag
-      particleSize,                        // particleSize
-      0.0,                                // padding
+      config.fadeEnabled ? 1.0 : 0.0,
+      config.colorTransitionEnabled ? 1.0 : 0.0,
+      config.particleSize,
+      0.0, // padding
       // Single color (vec3 + padding)
-      particleColor[0], particleColor[1], particleColor[2], 0.0,
+      config.particleColor[0], config.particleColor[1], config.particleColor[2], 0.0,
       // Start color (vec3 + padding)
-      startColor[0], startColor[1], startColor[2], 0.0,
+      config.startColor[0], config.startColor[1], config.startColor[2], 0.0,
       // End color (vec3 + padding)
-      endColor[0], endColor[1], endColor[2], 0.0
+      config.endColor[0], config.endColor[1], config.endColor[2], 0.0
     ]);
     
     device.queue.writeBuffer(appearanceUniformBuffer, 0, appearanceData);
   }
   
-  // Initialize the appearance uniform buffer with current values
-  updateAppearanceUniform();
-
-  // Initialize particles and start animation
-  spawnParticles();
-  lastTime = performance.now();
-  requestAnimationFrame(frame);
+  // Function to update bloom intensity
+  function updateBloomIntensity() {
+    const bloomIntensityData = new Float32Array(16).fill(0);
+    bloomIntensityData[0] = config.bloomIntensity;
+    device.queue.writeBuffer(bloomIntensityBuffer, 0, bloomIntensityData);
+  }
+  
+  // Function to update particle velocities based on speed changes
+  function updateParticleVelocities() {
+    particleSystem.updateParticleVelocities();
+  }
+  
+  // Function to update particle colors
+  function updateParticleColors() {
+    particleSystem.updateParticleColors();
+  }
+  
+  // Function to spawn particles
+  function spawnParticles() {
+    particleSystem.spawnParticles();
+  }
 }
 
+// Start the application
 main();
