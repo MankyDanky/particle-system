@@ -41,8 +41,10 @@ async function main() {
   const size = 0.5;
   
   // Bloom settings
-  const BLOOM_INTENSITY = 0.8;
+  const BLOOM_INTENSITY = 1.0;
   const BLUR_PASSES = 4;  // Number of blur passes
+  let bloomEnabled = true;
+  let bloomIntensity = 1.0;
   let bloomTextures = [];
   let bloomBindGroups = [];
   
@@ -169,7 +171,19 @@ async function main() {
       entries: [
         { binding: 0, resource: sampler },
         { binding: 1, resource: sceneTexture.createView() },
-        { binding: 2, resource: bloomTexB.createView() }
+        { binding: 2, resource: bloomTexB.createView() },
+        { binding: 3, resource: { buffer: bloomIntensityBuffer } }
+      ],
+    });
+    
+    // Also recreate the directRenderBindGroup to prevent using destroyed textures
+    directRenderBindGroup = device.createBindGroup({
+      layout: compositeBindGroupLayout,
+      entries: [
+        { binding: 0, resource: sampler },
+        { binding: 1, resource: sceneTexture.createView() },
+        { binding: 2, resource: bloomTexB.createView(), },  // Not used when bloom is disabled, but needed for layout compatibility
+        { binding: 3, resource: { buffer: bloomIntensityBuffer } }
       ],
     });
     
@@ -208,6 +222,10 @@ async function main() {
   const particleColorInput = document.getElementById('particle-color');
   const startColorInput = document.getElementById('start-color');
   const endColorInput = document.getElementById('end-color');
+  const bloomCheckbox = document.getElementById('bloom-checkbox');
+  const bloomIntensitySlider = document.getElementById('bloom-intensity-slider');
+  const bloomIntensityValue = document.getElementById('bloom-intensity-value');
+  const bloomIntensityContainer = document.getElementById('bloom-intensity-container');
   
   // Shape UI elements
   const emissionShapeSelect = document.getElementById('emission-shape');
@@ -396,6 +414,45 @@ async function main() {
       innerRadius = parseFloat(innerRadiusSlider.value);
     }
   });
+  
+  // Bloom effect controls
+  bloomCheckbox.addEventListener('change', () => {
+    bloomEnabled = bloomCheckbox.checked;
+    
+    // Show/hide the bloom intensity slider based on bloom enabled state
+    if (bloomEnabled) {
+      bloomIntensityContainer.classList.remove('hidden');
+    } else {
+      bloomIntensityContainer.classList.add('hidden');
+    }
+  });
+  
+  bloomIntensitySlider.addEventListener('input', () => {
+    bloomIntensity = parseFloat(bloomIntensitySlider.value);
+    bloomIntensityValue.textContent = bloomIntensity.toFixed(1);
+    
+    // Update the bloom intensity in the composite shader
+    updateBloomIntensity();
+  });
+  
+  // Function to update bloom intensity
+  function updateBloomIntensity() {
+    // Update the bloom intensity uniform buffer with the new value
+    const bloomIntensityData = new Float32Array(16).fill(0); // Initialize all to 0
+    bloomIntensityData[0] = bloomIntensity; // Set the intensity value
+    device.queue.writeBuffer(bloomIntensityBuffer, 0, bloomIntensityData);
+  }
+  
+  // Initialize bloom UI based on initial state
+  bloomCheckbox.checked = bloomEnabled;
+  bloomIntensitySlider.value = bloomIntensity;
+  bloomIntensityValue.textContent = bloomIntensity.toFixed(1);
+  
+  if (bloomEnabled) {
+    bloomIntensityContainer.classList.remove('hidden');
+  } else {
+    bloomIntensityContainer.classList.add('hidden');
+  }
   
   // Initialize emission shape UI
   emissionShapeSelect.value = emissionShape;
@@ -960,15 +1017,18 @@ async function main() {
     `,
   });
 
-  // Update the composite shader module
+  // Update the composite shader module to use a uniform for bloom intensity
   const compositeShaderModule = device.createShaderModule({
     code: `
-      // Carefully balanced bloom intensity
-      const BLOOM_INTENSITY: f32 = 1.0;
+      struct BloomIntensityUniforms {
+        intensity: f32,
+        padding: vec3<f32>,
+      }
 
       @binding(0) @group(0) var texSampler: sampler;
       @binding(1) @group(0) var originalTexture: texture_2d<f32>;
       @binding(2) @group(0) var blurredTexture: texture_2d<f32>;
+      @binding(3) @group(0) var<uniform> bloomUniforms: BloomIntensityUniforms;
 
       struct VertexOutput {
         @builtin(position) position: vec4<f32>,
@@ -1005,8 +1065,8 @@ async function main() {
         // Apply a subtle curve to make the bloom smoother
         let mappedBloom = pow(bloomColor.rgb, vec3<f32>(0.85));
         
-        // Add bloom to original with carefully calibrated intensity
-        return vec4<f32>(originalColor.rgb + (mappedBloom * BLOOM_INTENSITY), originalColor.a);
+        // Use the bloom intensity from uniform buffer
+        return vec4<f32>(originalColor.rgb + (mappedBloom * bloomUniforms.intensity), originalColor.a);
       }
     `,
   });
@@ -1033,6 +1093,11 @@ async function main() {
         binding: 2,
         visibility: GPUShaderStage.FRAGMENT,
         texture: {}
+      },
+      {
+        binding: 3,
+        visibility: GPUShaderStage.FRAGMENT,
+        buffer: { type: 'uniform' }
       }
     ]
   });
@@ -1156,6 +1221,112 @@ async function main() {
       {
         binding: 2,
         resource: bloomTexB.createView(),
+      },
+      {
+        binding: 3,
+        resource: { buffer: bloomIntensityBuffer },
+      }
+    ],
+  });
+
+  // Create a direct render shader for when bloom is disabled
+  const directRenderShaderModule = device.createShaderModule({
+    code: `
+      struct BloomIntensityUniforms {
+        intensity: f32,
+        padding: vec3<f32>,
+      }
+
+      @binding(0) @group(0) var texSampler: sampler;
+      @binding(1) @group(0) var originalTexture: texture_2d<f32>;
+      @binding(2) @group(0) var blurredTexture: texture_2d<f32>; // Not used but kept for layout compatibility
+      @binding(3) @group(0) var<uniform> bloomUniforms: BloomIntensityUniforms; // Not used but needed for layout compatibility
+
+      struct VertexOutput {
+        @builtin(position) position: vec4<f32>,
+        @location(0) texCoord: vec2<f32>,
+      }
+
+      @vertex
+      fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
+        var output: VertexOutput;
+        
+        // Generate fullscreen triangle
+        let positions = array<vec2<f32>, 3>(
+          vec2<f32>(-1.0, -1.0),
+          vec2<f32>(3.0, -1.0),
+          vec2<f32>(-1.0, 3.0)
+        );
+        
+        let texCoords = array<vec2<f32>, 3>(
+          vec2<f32>(0.0, 1.0),
+          vec2<f32>(2.0, 1.0),
+          vec2<f32>(0.0, -1.0)
+        );
+        
+        output.position = vec4<f32>(positions[vertexIndex], 0.0, 1.0);
+        output.texCoord = texCoords[vertexIndex];
+        return output;
+      }
+
+      @fragment
+      fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+        // Simply render the original texture without any bloom
+        return textureSample(originalTexture, texSampler, input.texCoord);
+      }
+    `,
+  });
+
+  // Create direct render pipeline (used when bloom is disabled)
+  const directRenderPipeline = device.createRenderPipeline({
+    layout: compositePipelineLayout,
+    vertex: {
+      module: directRenderShaderModule,
+      entryPoint: 'vs_main',
+    },
+    fragment: {
+      module: directRenderShaderModule,
+      entryPoint: 'fs_main',
+      targets: [{
+        format: format,
+        blend: {
+          color: {
+            srcFactor: 'one',
+            dstFactor: 'one-minus-src-alpha',
+            operation: 'add',
+          },
+          alpha: {
+            srcFactor: 'one',
+            dstFactor: 'one-minus-src-alpha',
+            operation: 'add',
+          },
+        },
+      }],
+    },
+    primitive: {
+      topology: 'triangle-list',
+    },
+  });
+
+  // Binding group for direct rendering (without bloom)
+  let directRenderBindGroup = device.createBindGroup({
+    layout: compositeBindGroupLayout,
+    entries: [
+      {
+        binding: 0,
+        resource: sampler,
+      },
+      {
+        binding: 1,
+        resource: sceneTexture.createView(),
+      },
+      {
+        binding: 2, // Not used but needed for layout compatibility
+        resource: bloomTexB.createView(),
+      },
+      {
+        binding: 3, // Add bloom intensity buffer even though it won't be used
+        resource: { buffer: bloomIntensityBuffer },
       }
     ],
   });
@@ -1305,55 +1476,57 @@ async function main() {
     
     scenePassEncoder.end();
     
-    // Apply multiple blur passes for higher quality bloom
-    // First ping-pong between textures for multiple passes
-    for (let i = 0; i < 3; i++) { // Increased to 3 passes for higher quality
-      // 2. Apply horizontal blur from scene texture (or bloomTexB in subsequent passes) to bloomTexA
-      const horizontalBlurPassDescriptor = {
-        colorAttachments: [{
-          view: bloomTexA.createView(),
-          loadOp: 'clear',
-          storeOp: 'store',
-          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
-        }],
-      };
-      
-      const horizontalBlurPassEncoder = commandEncoder.beginRenderPass(horizontalBlurPassDescriptor);
-      horizontalBlurPassEncoder.setPipeline(blurPipeline);
-      
-      // On first pass, use scene texture as input; otherwise use result of previous vertical pass
-      const horizontalBindGroup = i === 0 ? horizontalBlurBindGroup : 
-        device.createBindGroup({
-          layout: bloomBindGroupLayout,
-          entries: [
-            { binding: 0, resource: sampler },
-            { binding: 1, resource: bloomTexB.createView() },
-            { binding: 2, resource: { buffer: horizontalBlurUniformBuffer } }
-          ],
-        });
-      
-      horizontalBlurPassEncoder.setBindGroup(0, horizontalBindGroup);
-      horizontalBlurPassEncoder.draw(3);
-      horizontalBlurPassEncoder.end();
-      
-      // 3. Apply vertical blur from bloomTexA to bloomTexB
-      const verticalBlurPassDescriptor = {
-        colorAttachments: [{
-          view: bloomTexB.createView(),
-          loadOp: 'clear',
-          storeOp: 'store',
-          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
-        }],
-      };
-      
-      const verticalBlurPassEncoder = commandEncoder.beginRenderPass(verticalBlurPassDescriptor);
-      verticalBlurPassEncoder.setPipeline(blurPipeline);
-      verticalBlurPassEncoder.setBindGroup(0, verticalBlurBindGroup);
-      verticalBlurPassEncoder.draw(3);
-      verticalBlurPassEncoder.end();
+    if (bloomEnabled) {
+      // Apply multiple blur passes for higher quality bloom
+      // First ping-pong between textures for multiple passes
+      for (let i = 0; i < 3; i++) { // Increased to 3 passes for higher quality
+        // 2. Apply horizontal blur from scene texture (or bloomTexB in subsequent passes) to bloomTexA
+        const horizontalBlurPassDescriptor = {
+          colorAttachments: [{
+            view: bloomTexA.createView(),
+            loadOp: 'clear',
+            storeOp: 'store',
+            clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
+          }],
+        };
+        
+        const horizontalBlurPassEncoder = commandEncoder.beginRenderPass(horizontalBlurPassDescriptor);
+        horizontalBlurPassEncoder.setPipeline(blurPipeline);
+        
+        // On first pass, use scene texture as input; otherwise use result of previous vertical pass
+        const horizontalBindGroup = i === 0 ? horizontalBlurBindGroup : 
+          device.createBindGroup({
+            layout: bloomBindGroupLayout,
+            entries: [
+              { binding: 0, resource: sampler },
+              { binding: 1, resource: bloomTexB.createView() },
+              { binding: 2, resource: { buffer: horizontalBlurUniformBuffer } }
+            ],
+          });
+        
+        horizontalBlurPassEncoder.setBindGroup(0, horizontalBindGroup);
+        horizontalBlurPassEncoder.draw(3);
+        horizontalBlurPassEncoder.end();
+        
+        // 3. Apply vertical blur from bloomTexA to bloomTexB
+        const verticalBlurPassDescriptor = {
+          colorAttachments: [{
+            view: bloomTexB.createView(),
+            loadOp: 'clear',
+            storeOp: 'store',
+            clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
+          }],
+        };
+        
+        const verticalBlurPassEncoder = commandEncoder.beginRenderPass(verticalBlurPassDescriptor);
+        verticalBlurPassEncoder.setPipeline(blurPipeline);
+        verticalBlurPassEncoder.setBindGroup(0, verticalBlurBindGroup);
+        verticalBlurPassEncoder.draw(3);
+        verticalBlurPassEncoder.end();
+      }
     }
     
-    // 4. Final composite pass - blend the bloomed particles onto a solid background
+    // 4. Final composite pass - blend the particles onto a solid background (with or without bloom)
     const compositePassDescriptor = {
       colorAttachments: [{
         view: context.getCurrentTexture().createView(),
@@ -1364,8 +1537,18 @@ async function main() {
     };
     
     const compositePassEncoder = commandEncoder.beginRenderPass(compositePassDescriptor);
-    compositePassEncoder.setPipeline(compositePipeline);
-    compositePassEncoder.setBindGroup(0, compositeBindGroup);
+    
+    if (bloomEnabled) {
+      // If bloom is enabled, use the composite pipeline to blend original and blurred textures
+      compositePassEncoder.setPipeline(compositePipeline);
+      compositePassEncoder.setBindGroup(0, compositeBindGroup);
+    } else {
+      // If bloom is disabled, render the scene directly to the canvas
+      // Use a special 'direct render' composite shader and bind group
+      compositePassEncoder.setPipeline(directRenderPipeline);
+      compositePassEncoder.setBindGroup(0, directRenderBindGroup);
+    }
+    
     compositePassEncoder.draw(3);
     compositePassEncoder.end();
     
