@@ -58,6 +58,13 @@ async function main() {
   let emitting = false;
   let burstMode = false;
   
+  // Appearance settings uniform buffer (to avoid shader recompilation)
+  const appearanceUniformBuffer = device.createBuffer({
+    size: 64, // [fadeEnabled(f32), colorTransitionEnabled(f32), particleSize(f32), padding(f32), 
+               // particleColor(vec3), padding(f32), startColor(vec3), padding(f32), endColor(vec3), padding(f32)]
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+  
   // Emission settings
   let emissionRate = 10; // particles per second
   let emissionDuration = 10; // seconds
@@ -280,8 +287,8 @@ async function main() {
   
   fadeCheckbox.addEventListener('change', () => {
     fadeEnabled = fadeCheckbox.checked;
-    createShaderAndPipeline();
-    updateBuffers();
+    // Update uniform buffer instead of recreating shader
+    updateAppearanceUniform();
   });
   
   colorTransitionCheckbox.addEventListener('change', () => {
@@ -295,31 +302,31 @@ async function main() {
       gradientColorContainer.classList.add('hidden');
     }
     
-    createShaderAndPipeline();
-    updateBuffers();
+    // Update uniform buffer instead of recreating shader
+    updateAppearanceUniform();
   });
   
   // Color input event listeners
   particleColorInput.addEventListener('input', () => {
     particleColor = hexToRgb(particleColorInput.value);
-    // Recreate shader to use new color values immediately
-    createShaderAndPipeline();
+    // Update uniform buffer instead of recreating shader
+    updateAppearanceUniform();
     // Apply color to existing particles
     updateParticleColors();
   });
   
   startColorInput.addEventListener('input', () => {
     startColor = hexToRgb(startColorInput.value);
-    // Recreate shader to use new color values immediately
-    createShaderAndPipeline();
+    // Update uniform buffer instead of recreating shader
+    updateAppearanceUniform();
     // Apply color to existing particles
     updateParticleColors();
   });
   
   endColorInput.addEventListener('input', () => {
     endColor = hexToRgb(endColorInput.value);
-    // Recreate shader to use new color values immediately
-    createShaderAndPipeline();
+    // Update uniform buffer instead of recreating shader
+    updateAppearanceUniform();
     // Apply color to existing particles
     updateParticleColors();
   });
@@ -330,11 +337,11 @@ async function main() {
     sizeValue.textContent = value;
     particleSize = parseFloat(value);
     
-    // Recreate the quad geometry with new size
-    updateQuadGeometry(particleSize);
+    // Update appearance uniform buffer instead of recreating shader
+    updateAppearanceUniform();
     
-    // Recreate shader and pipeline to apply new size
-    createShaderAndPipeline();
+    // We still need to update the quad geometry
+    updateQuadGeometry(particleSize);
   });
   
   // Update speed value display when slider changes
@@ -480,7 +487,21 @@ async function main() {
           aspectRatio: f32,
         }
 
+        struct AppearanceUniforms {
+          fadeEnabled: f32,
+          colorTransitionEnabled: f32,
+          particleSize: f32,
+          padding: f32,
+          singleColor: vec3<f32>,
+          padding2: f32,
+          startColor: vec3<f32>,
+          padding3: f32,
+          endColor: vec3<f32>,
+          padding4: f32,
+        }
+
         @binding(0) @group(0) var<uniform> uniforms : Uniforms;
+        @binding(1) @group(0) var<uniform> appearance : AppearanceUniforms;
 
         struct VertexInput {
           @location(0) position : vec3<f32>,
@@ -508,18 +529,15 @@ async function main() {
           // Calculate color based on settings
           var finalColor = baseColor;
           
-          if (${colorTransitionEnabled ? "true" : "false"}) {
-            let startColor = vec3<f32>(${startColor[0]}, ${startColor[1]}, ${startColor[2]});
-            let endColor = vec3<f32>(${endColor[0]}, ${endColor[1]}, ${endColor[2]});
-            finalColor = mix(startColor, endColor, lifeRatio);
+          if (appearance.colorTransitionEnabled > 0.5) {
+            finalColor = mix(appearance.startColor, appearance.endColor, lifeRatio);
           } else {
-            let singleColor = vec3<f32>(${particleColor[0]}, ${particleColor[1]}, ${particleColor[2]});
-            finalColor = singleColor;
+            finalColor = appearance.singleColor;
           }
           
           // Calculate alpha based on lifetime
           var alpha = 0.0;
-          if (${fadeEnabled ? "true" : "false"}) {
+          if (appearance.fadeEnabled > 0.5) {
             alpha = max(0.0, 1.0 - lifeRatio);
           } else {
             alpha = select(0.0, 1.0, age < lifetime);
@@ -530,7 +548,7 @@ async function main() {
           
           // Distance-based size scaling with particle size factor
           let cameraToParticle = length(center - uniforms.cameraPosition);
-          let baseScaleFactor = 0.15 * ${particleSize}; // Apply the slider value here
+          let baseScaleFactor = 0.15 * appearance.particleSize; // Apply the size from uniform
           let distanceScaleFactor = baseScaleFactor * (10.0 / cameraToParticle);
           
           // Apply billboard technique
@@ -890,11 +908,18 @@ async function main() {
 
   // Create pipeline layout
   const bindGroupLayout = device.createBindGroupLayout({
-    entries: [{
-      binding: 0,
-      visibility: GPUShaderStage.VERTEX,
-      buffer: { type: 'uniform' }
-    }],
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.VERTEX,
+        buffer: { type: 'uniform' }
+      },
+      {
+        binding: 1,
+        visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+        buffer: { type: 'uniform' }
+      }
+    ],
   });
 
   // Create bloom-related bind group layouts and pipelines
@@ -1341,10 +1366,16 @@ async function main() {
   // Create bind group
   const bindGroup = device.createBindGroup({
     layout: bindGroupLayout,
-    entries: [{
-      binding: 0,
-      resource: { buffer: uniformBuffer },
-    }],
+    entries: [
+      {
+        binding: 0,
+        resource: { buffer: uniformBuffer },
+      },
+      {
+        binding: 1,
+        resource: { buffer: appearanceUniformBuffer },
+      }
+    ],
   });
 
   // Create projection matrix
@@ -1622,6 +1653,27 @@ async function main() {
     // Update the vertex buffer with new sized vertices
     device.queue.writeBuffer(quadVertexBuffer, 0, newQuadVertices);
   }
+
+  // Function to update appearance settings in the uniform buffer
+  function updateAppearanceUniform() {
+    const appearanceData = new Float32Array([
+      fadeEnabled ? 1.0 : 0.0,            // fadeEnabled flag
+      colorTransitionEnabled ? 1.0 : 0.0,  // colorTransitionEnabled flag
+      particleSize,                        // particleSize
+      0.0,                                // padding
+      // Single color (vec3 + padding)
+      particleColor[0], particleColor[1], particleColor[2], 0.0,
+      // Start color (vec3 + padding)
+      startColor[0], startColor[1], startColor[2], 0.0,
+      // End color (vec3 + padding)
+      endColor[0], endColor[1], endColor[2], 0.0
+    ]);
+    
+    device.queue.writeBuffer(appearanceUniformBuffer, 0, appearanceData);
+  }
+  
+  // Initialize the appearance uniform buffer with current values
+  updateAppearanceUniform();
 
   // Initialize particles and start animation
   spawnParticles();
