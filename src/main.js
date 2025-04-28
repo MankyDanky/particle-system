@@ -444,7 +444,8 @@ async function main() {
         fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
           let brightColor = input.color;
           
-          return vec4<f32>(brightColor, input.alpha);
+          // Pre-multiply alpha to help bloom extend beyond edges
+          return vec4<f32>(brightColor * input.alpha, input.alpha);
         }
       `,
     });
@@ -1005,6 +1006,18 @@ async function main() {
       entryPoint: 'fs_main',
       targets: [{
         format: format,
+        blend: {
+          color: {
+            srcFactor: 'one',
+            dstFactor: 'one',
+            operation: 'add',
+          },
+          alpha: {
+            srcFactor: 'one',
+            dstFactor: 'one',
+            operation: 'add',
+          },
+        },
       }],
     },
     primitive: {
@@ -1024,6 +1037,18 @@ async function main() {
       entryPoint: 'fs_main',
       targets: [{
         format: format,
+        blend: {
+          color: {
+            srcFactor: 'one',
+            dstFactor: 'one-minus-src-alpha',
+            operation: 'add',
+          },
+          alpha: {
+            srcFactor: 'one',
+            dstFactor: 'one-minus-src-alpha',
+            operation: 'add',
+          },
+        },
       }],
     },
     primitive: {
@@ -1124,7 +1149,7 @@ async function main() {
     const deltaTime = (currentTime - lastTime) / 1000;
     lastTime = currentTime;
     
-    // Handle particle emission
+    // Update particle state (age, position, etc.)
     if (emitting) {
       // Update emission timer
       currentEmissionTime += deltaTime;
@@ -1201,13 +1226,13 @@ async function main() {
     // Render frame
     const commandEncoder = device.createCommandEncoder();
     
-    // 1. First render the scene to a texture
+    // 1. First render ONLY the particles to a texture (no background)
     const sceneRenderPassDescriptor = {
       colorAttachments: [{
         view: sceneTexture.createView(),
         loadOp: 'clear',
         storeOp: 'store',
-        clearValue: { r: 0.1, g: 0.2, b: 0.3, a: 1.0 },
+        clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }, // Clear to transparent black
       }],
       depthStencilAttachment: {
         view: depthTexture.createView(),
@@ -1217,7 +1242,7 @@ async function main() {
       },
     };
     
-    // Render particles to scene texture
+    // Render particles to scene texture with transparency
     const scenePassEncoder = commandEncoder.beginRenderPass(sceneRenderPassDescriptor);
     scenePassEncoder.setPipeline(pipeline);
     scenePassEncoder.setBindGroup(0, bindGroup);
@@ -1238,7 +1263,7 @@ async function main() {
         view: bloomTexA.createView(),
         loadOp: 'clear',
         storeOp: 'store',
-        clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+        clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }, // Clear to transparent
       }],
     };
     
@@ -1254,7 +1279,7 @@ async function main() {
         view: bloomTexB.createView(),
         loadOp: 'clear',
         storeOp: 'store',
-        clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+        clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }, // Clear to transparent
       }],
     };
     
@@ -1264,13 +1289,13 @@ async function main() {
     verticalBlurPassEncoder.draw(3); // Draw a fullscreen triangle
     verticalBlurPassEncoder.end();
     
-    // 4. Final composite pass - blend the original scene with bloom effect
+    // 4. Final composite pass - blend the bloomed particles onto a solid background
     const compositePassDescriptor = {
       colorAttachments: [{
         view: context.getCurrentTexture().createView(),
         loadOp: 'clear',
         storeOp: 'store',
-        clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+        clearValue: { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }, // Set the background color here
       }],
     };
     
