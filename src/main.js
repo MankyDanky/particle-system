@@ -109,16 +109,17 @@ async function main() {
     usage: GPUTextureUsage.RENDER_ATTACHMENT,
   });
   
-  // Resize function
+  // Resize function with better texture management
   function resizeCanvasToDisplaySize() {
+    // Store old textures
+    const oldSceneTexture = sceneTexture;
+    const oldBloomTexA = bloomTexA;
+    const oldBloomTexB = bloomTexB;
+    const oldDepthTexture = depthTexture;
+    
+    // Update canvas size
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    
-    // Destroy old textures
-    depthTexture.destroy();
-    sceneTexture.destroy();
-    bloomTexA.destroy();
-    bloomTexB.destroy();
     
     // Create new textures with updated size
     const { sceneTexture: newScene, bloomTexA: newBloomA, bloomTexB: newBloomB } = createRenderTextures();
@@ -130,6 +131,49 @@ async function main() {
       size: [canvas.width, canvas.height],
       format: 'depth24plus',
       usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+    
+    // Update the blur uniforms with new resolution
+    const horizontalDirection = new Float32Array([1.0, 0.0, canvas.width, canvas.height, 0.0, 0.0, 0.0, 0.0]);
+    const verticalDirection = new Float32Array([0.0, 1.0, canvas.width, canvas.height, 0.0, 0.0, 0.0, 0.0]);
+    device.queue.writeBuffer(horizontalBlurUniformBuffer, 0, horizontalDirection);
+    device.queue.writeBuffer(verticalBlurUniformBuffer, 0, verticalDirection);
+    
+    // Recreate bind groups with new textures
+    horizontalBlurBindGroup = device.createBindGroup({
+      layout: bloomBindGroupLayout,
+      entries: [
+        { binding: 0, resource: sampler },
+        { binding: 1, resource: sceneTexture.createView() },
+        { binding: 2, resource: { buffer: horizontalBlurUniformBuffer } }
+      ],
+    });
+    
+    verticalBlurBindGroup = device.createBindGroup({
+      layout: bloomBindGroupLayout,
+      entries: [
+        { binding: 0, resource: sampler },
+        { binding: 1, resource: bloomTexA.createView() },
+        { binding: 2, resource: { buffer: verticalBlurUniformBuffer } }
+      ],
+    });
+    
+    compositeBindGroup = device.createBindGroup({
+      layout: compositeBindGroupLayout,
+      entries: [
+        { binding: 0, resource: sampler },
+        { binding: 1, resource: sceneTexture.createView() },
+        { binding: 2, resource: bloomTexB.createView() }
+      ],
+    });
+    
+    // Schedule the old textures for destruction after the current frame completes
+    requestAnimationFrame(() => {
+      // Destroy old textures in the next frame when they're no longer in use
+      oldSceneTexture.destroy();
+      oldBloomTexA.destroy();
+      oldBloomTexB.destroy();
+      oldDepthTexture.destroy();
     });
   }
   
@@ -1063,7 +1107,7 @@ async function main() {
   });
 
   // Create horizontal and vertical blur bind groups
-  const horizontalBlurBindGroup = device.createBindGroup({
+  let horizontalBlurBindGroup = device.createBindGroup({
     layout: bloomBindGroupLayout,
     entries: [
       {
@@ -1081,7 +1125,7 @@ async function main() {
     ],
   });
 
-  const verticalBlurBindGroup = device.createBindGroup({
+  let verticalBlurBindGroup = device.createBindGroup({
     layout: bloomBindGroupLayout,
     entries: [
       {
@@ -1100,7 +1144,7 @@ async function main() {
   });
 
   // Final composite bind group
-  const compositeBindGroup = device.createBindGroup({
+  let compositeBindGroup = device.createBindGroup({
     layout: compositeBindGroupLayout,
     entries: [
       {
