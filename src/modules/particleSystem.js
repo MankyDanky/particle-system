@@ -300,31 +300,41 @@ export class ParticleSystem {
       
       // Check if we're still within emission duration
       if (this.currentEmissionTime < this.config.emissionDuration) {
-        // Calculate how many particles to emit this frame, including any remainder from previous frame
-        const totalParticlesToEmit = (this.config.emissionRate * deltaTime) + this.emissionRemainder;
-        let wholeParticlesToEmit = Math.floor(totalParticlesToEmit);
-        this.emissionRemainder = totalParticlesToEmit - wholeParticlesToEmit;
-        
-        // Make sure we don't exceed our total particle count for the entire emission duration
-        if (this.particlesEmittedSoFar + wholeParticlesToEmit > this.totalParticlesToEmit) {
-          wholeParticlesToEmit = this.totalParticlesToEmit - this.particlesEmittedSoFar;
-        }
-        
-        // Force at least one particle emission at lower emission rates for a more consistent look
-        if (wholeParticlesToEmit === 0 && forceUpdate && this.config.emissionRate > 0) {
-          wholeParticlesToEmit = 1;
-          this.emissionRemainder = 0; // Reset remainder to avoid building up
-        }
-        
         // Remember the current active count before emitting new particles
         const prevActiveCount = this.activeParticles;
         
+        // Calculate the number of particles to emit this frame based on emission rate
+        // For low emission rates, use probabilistic approach
+        let particlesToEmit = 0;
+        
+        if (this.config.emissionRate >= 1) {
+          // For rates >= 1, calculate deterministically
+          particlesToEmit = Math.floor(this.config.emissionRate * deltaTime);
+          
+          // Probabilistic component for the fractional part
+          const fractionalPart = (this.config.emissionRate * deltaTime) - particlesToEmit;
+          if (Math.random() < fractionalPart) {
+            particlesToEmit += 1;
+          }
+        } else {
+          // For very low rates, use pure probability
+          const emissionProbability = this.config.emissionRate * deltaTime;
+          if (Math.random() < emissionProbability) {
+            particlesToEmit = 1;
+          }
+        }
+        
+        // Force at least one particle emission at lower emission rates if it's been too long
+        if (particlesToEmit === 0 && forceUpdate && this.config.emissionRate > 0 && 
+            this.activeParticles < this.particleCount) {
+          particlesToEmit = 1;
+        }
+        
         // Emit particles
         let particlesEmitted = false;
-        for (let i = 0; i < wholeParticlesToEmit; i++) {
+        for (let i = 0; i < particlesToEmit; i++) {
           if (this.emitParticle()) {
             particlesEmitted = true;
-            this.particlesEmittedSoFar++;
           } else {
             // We reached the particle limit, no need to continue
             break;
@@ -359,8 +369,6 @@ export class ParticleSystem {
         this.emitting = false;
         // Set emission time to exactly match the duration to prevent any timing issues
         this.currentEmissionTime = this.config.emissionDuration;
-        // Clear any remainder to prevent accidental emissions
-        this.emissionRemainder = 0;
       }
     }
     
@@ -476,15 +484,12 @@ export class ParticleSystem {
         const lifetime = this.particleData[i * 8 + 7];
         
         if (age >= lifetime) {
-          // We no longer respawn particles at the emission duration boundary
-          // Only respawn particles during active emission within duration
+          // Check if we should respawn the particle
           if (this.emitting && 
-              this.currentEmissionTime < this.config.emissionDuration && 
-              this.particlesEmittedSoFar < this.totalParticlesToEmit &&
+              this.currentEmissionTime < this.config.emissionDuration &&
               newActiveCount < this.particleCount) {
             this.respawnParticle(i, newActiveCount);
             newActiveCount++;
-            this.particlesEmittedSoFar++;
             continue;
           }
           // Skip dead particles
