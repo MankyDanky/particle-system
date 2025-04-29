@@ -4,12 +4,258 @@
 
 import { hexToRgb } from './utils.js';
 
+// New MultiSystemUI class to handle the particle system list
+export class MultiSystemUI {
+  constructor(manager, onSystemSelected) {
+    this.manager = manager;
+    this.onSystemSelected = onSystemSelected;
+    this.container = null;
+    this.systemsList = null;
+    this.initElements();
+  }
+
+  initElements() {
+    // Create container for particle system list
+    this.container = document.createElement('div');
+    this.container.className = 'particle-systems-list';
+    this.container.style.position = 'absolute';
+    this.container.style.top = '10px';
+    this.container.style.right = '10px';
+    this.container.style.width = '200px';
+    this.container.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    this.container.style.borderRadius = '5px';
+    this.container.style.padding = '10px';
+    this.container.style.color = 'white';
+    this.container.style.fontFamily = 'Arial, sans-serif';
+    this.container.style.zIndex = '1000';
+
+    // Add title
+    const title = document.createElement('h3');
+    title.textContent = 'Particle Systems';
+    title.style.margin = '0 0 10px 0';
+    title.style.borderBottom = '1px solid rgba(255, 255, 255, 0.3)';
+    title.style.paddingBottom = '5px';
+    this.container.appendChild(title);
+
+    // Create buttons container
+    const buttonsContainer = document.createElement('div');
+    buttonsContainer.style.display = 'flex';
+    buttonsContainer.style.justifyContent = 'space-between';
+    buttonsContainer.style.marginBottom = '10px';
+    
+    // Add new system button
+    const addButton = document.createElement('button');
+    addButton.textContent = 'Add System';
+    addButton.className = 'particle-systems-button';
+    addButton.style.backgroundColor = '#4CAF50';
+    addButton.style.border = 'none';
+    addButton.style.padding = '5px 10px';
+    addButton.style.borderRadius = '3px';
+    addButton.style.color = 'white';
+    addButton.style.cursor = 'pointer';
+    addButton.onclick = () => this.addNewSystem();
+    buttonsContainer.appendChild(addButton);
+    
+    // Add duplicate button
+    const duplicateButton = document.createElement('button');
+    duplicateButton.textContent = 'Duplicate';
+    duplicateButton.className = 'particle-systems-button';
+    duplicateButton.style.backgroundColor = '#2196F3';
+    duplicateButton.style.border = 'none';
+    duplicateButton.style.padding = '5px 10px';
+    duplicateButton.style.borderRadius = '3px';
+    duplicateButton.style.color = 'white';
+    duplicateButton.style.cursor = 'pointer';
+    duplicateButton.onclick = () => this.duplicateSystem();
+    buttonsContainer.appendChild(duplicateButton);
+    
+    // Add delete button
+    const deleteButton = document.createElement('button');
+    deleteButton.textContent = 'Delete';
+    deleteButton.className = 'particle-systems-button';
+    deleteButton.style.backgroundColor = '#f44336';
+    deleteButton.style.border = 'none';
+    deleteButton.style.padding = '5px 10px';
+    deleteButton.style.borderRadius = '3px';
+    deleteButton.style.color = 'white';
+    deleteButton.style.cursor = 'pointer';
+    deleteButton.onclick = () => this.deleteSystem();
+    buttonsContainer.appendChild(deleteButton);
+    
+    this.container.appendChild(buttonsContainer);
+
+    // Create systems list
+    this.systemsList = document.createElement('ul');
+    this.systemsList.style.listStyle = 'none';
+    this.systemsList.style.padding = '0';
+    this.systemsList.style.margin = '0';
+    this.systemsList.style.maxHeight = '300px';
+    this.systemsList.style.overflowY = 'auto';
+    this.container.appendChild(this.systemsList);
+
+    // Add to document
+    document.body.appendChild(this.container);
+    
+    // Initialize list
+    this.updateSystemsList();
+  }
+
+  updateSystemsList() {
+    // Clear existing items
+    this.systemsList.innerHTML = '';
+    
+    // Get systems from manager
+    const systems = this.manager.getSystemsList();
+    
+    // Create list items
+    systems.forEach(system => {
+      const item = document.createElement('li');
+      item.style.padding = '8px 10px';
+      item.style.margin = '4px 0';
+      item.style.borderRadius = '3px';
+      item.style.cursor = 'pointer';
+      item.style.transition = 'background-color 0.2s';
+      
+      if (system.isActive) {
+        item.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+        item.style.fontWeight = 'bold';
+      } else {
+        item.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+      }
+      
+      item.textContent = system.name;
+      item.onclick = () => {
+        this.manager.setActiveSystem(system.index);
+        this.updateSystemsList();
+        if (this.onSystemSelected) {
+          this.onSystemSelected(system.index);
+        }
+      };
+      
+      // Hover effect
+      item.onmouseover = () => {
+        if (!system.isActive) {
+          item.style.backgroundColor = 'rgba(255, 255, 255, 0.15)';
+        }
+      };
+      
+      item.onmouseout = () => {
+        if (!system.isActive) {
+          item.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        }
+      };
+      
+      this.systemsList.appendChild(item);
+    });
+  }
+
+  addNewSystem() {
+    // Create a new system with default config - adding all required color properties
+    const id = this.manager.createParticleSystem({
+      name: `System ${this.manager.systemCounter}`,
+      particleCount: 100,
+      lifetime: 5,
+      emissionRate: 10,
+      emissionDuration: 10,
+      particleSize: 0.5,
+      particleSpeed: 1.0,
+      emissionShape: 'cube',
+      cubeLength: 2.0,
+      outerLength: 2.0,
+      innerLength: 0.0,
+      outerRadius: 2.0,
+      innerRadius: 0.0,
+      squareSize: 2.0,
+      squareInnerSize: 0.0,
+      circleInnerRadius: 0.0,
+      circleOuterRadius: 2.0,
+      fadeEnabled: true,
+      colorTransitionEnabled: false,
+      particleColor: [1, 1, 1], // White
+      startColor: [1, 0, 0], // Red
+      endColor: [0, 0, 1], // Blue
+      bloomEnabled: true,
+      bloomIntensity: 1.0,
+      burstMode: false
+    });
+    
+    // Set as active
+    const index = this.manager.particleSystems.length - 1;
+    this.manager.setActiveSystem(index);
+    
+    // Spawn particles in the new system
+    this.manager.getActiveSystem().spawnParticles();
+    
+    // Update UI
+    this.updateSystemsList();
+    
+    // Notify parent
+    if (this.onSystemSelected) {
+      this.onSystemSelected(index);
+    }
+  }
+
+  duplicateSystem() {
+    if (this.manager.particleSystems.length === 0) return;
+    
+    // Duplicate active system
+    const newId = this.manager.duplicateActiveSystem();
+    if (newId >= 0) {
+      // Find and set the new system as active
+      const newIndex = this.manager.particleSystems.findIndex(
+        sys => sys.config.id === newId
+      );
+      
+      if (newIndex >= 0) {
+        this.manager.setActiveSystem(newIndex);
+        
+        // Spawn particles in the new system
+        this.manager.getActiveSystem().spawnParticles();
+        
+        // Update UI
+        this.updateSystemsList();
+        
+        // Notify parent
+        if (this.onSystemSelected) {
+          this.onSystemSelected(newIndex);
+        }
+      }
+    }
+  }
+
+  deleteSystem() {
+    if (this.manager.particleSystems.length <= 1) {
+      // Don't allow deleting the last system
+      alert("Cannot delete the only particle system.");
+      return;
+    }
+    
+    // Remove active system
+    const index = this.manager.activeSystemIndex;
+    this.manager.removeSystem(index);
+    
+    // Update UI
+    this.updateSystemsList();
+    
+    // Notify parent
+    if (this.onSystemSelected) {
+      this.onSystemSelected(this.manager.activeSystemIndex);
+    }
+  }
+}
+
 export class ParticleUI {
   constructor(config) {
     this.config = config;
     this.initElements();
     this.setupEventListeners();
     this.updateUIState();
+  }
+
+  // Clean up previous event listeners to prevent memory leaks and multiple handlers
+  cleanup() {
+    // Optional - only implement if needed for memory management
+    // Currently UI elements are reused rather than recreated
   }
 
   initElements() {
@@ -71,29 +317,32 @@ export class ParticleUI {
   }
 
   setupEventListeners() {
+    // Remove any existing event listeners to prevent duplicates
+    this.removeAllEventListeners();
+    
     // Lifetime slider
-    this.lifetimeSlider.addEventListener('input', () => {
+    this.lifetimeSlider.addEventListener('input', this.onLifetimeChange = () => {
       const value = this.lifetimeSlider.value;
       this.lifetimeValue.textContent = `${value} sec`;
       this.config.lifetime = parseFloat(value);
     });
     
     // Emission duration slider
-    this.emissionDurationSlider.addEventListener('input', () => {
+    this.emissionDurationSlider.addEventListener('input', this.onEmissionDurationChange = () => {
       const value = this.emissionDurationSlider.value;
       this.emissionDurationValue.textContent = `${value} sec`;
       this.config.emissionDuration = parseFloat(value);
     });
     
     // Emission rate slider
-    this.emissionRateSlider.addEventListener('input', () => {
+    this.emissionRateSlider.addEventListener('input', this.onEmissionRateChange = () => {
       const value = this.emissionRateSlider.value;
       this.emissionRateValue.textContent = `${value} particles/sec`;
       this.config.emissionRate = parseFloat(value);
     });
     
     // Fade checkbox
-    this.fadeCheckbox.addEventListener('change', () => {
+    this.fadeCheckbox.addEventListener('change', this.onFadeChange = () => {
       this.config.fadeEnabled = this.fadeCheckbox.checked;
       
       if (this.config.onAppearanceChange) {
@@ -102,7 +351,7 @@ export class ParticleUI {
     });
     
     // Color transition checkbox
-    this.colorTransitionCheckbox.addEventListener('change', () => {
+    this.colorTransitionCheckbox.addEventListener('change', this.onColorTransitionChange = () => {
       this.config.colorTransitionEnabled = this.colorTransitionCheckbox.checked;
       
       if (this.colorTransitionCheckbox.checked) {
@@ -119,7 +368,7 @@ export class ParticleUI {
     });
     
     // Color input event listeners
-    this.particleColorInput.addEventListener('input', () => {
+    this.particleColorInput.addEventListener('input', this.onParticleColorChange = () => {
       this.config.particleColor = hexToRgb(this.particleColorInput.value);
       
       if (this.config.onAppearanceChange) {
@@ -131,7 +380,7 @@ export class ParticleUI {
       }
     });
     
-    this.startColorInput.addEventListener('input', () => {
+    this.startColorInput.addEventListener('input', this.onStartColorChange = () => {
       this.config.startColor = hexToRgb(this.startColorInput.value);
       
       if (this.config.onAppearanceChange) {
@@ -143,7 +392,7 @@ export class ParticleUI {
       }
     });
     
-    this.endColorInput.addEventListener('input', () => {
+    this.endColorInput.addEventListener('input', this.onEndColorChange = () => {
       this.config.endColor = hexToRgb(this.endColorInput.value);
       
       if (this.config.onAppearanceChange) {
@@ -156,7 +405,7 @@ export class ParticleUI {
     });
     
     // Size slider
-    this.sizeSlider.addEventListener('input', () => {
+    this.sizeSlider.addEventListener('input', this.onSizeChange = () => {
       const value = this.sizeSlider.value;
       this.sizeValue.textContent = value;
       this.config.particleSize = parseFloat(value);
@@ -171,7 +420,7 @@ export class ParticleUI {
     });
     
     // Speed slider
-    this.speedSlider.addEventListener('input', () => {
+    this.speedSlider.addEventListener('input', this.onSpeedChange = () => {
       const value = this.speedSlider.value;
       this.speedValue.textContent = value;
       this.config.particleSpeed = parseFloat(value);
@@ -182,7 +431,7 @@ export class ParticleUI {
     });
     
     // Particle count slider
-    this.particleCountSlider.addEventListener('input', () => {
+    this.particleCountSlider.addEventListener('input', this.onParticleCountChange = () => {
       const value = this.particleCountSlider.value;
       this.particleCountValue.textContent = value;
       this.config.particleCount = parseInt(value);
@@ -194,7 +443,7 @@ export class ParticleUI {
     });
     
     // Burst mode checkbox
-    this.burstCheckbox.addEventListener('change', () => {
+    this.burstCheckbox.addEventListener('change', this.onBurstChange = () => {
       this.config.burstMode = this.burstCheckbox.checked;
       
       if (this.burstCheckbox.checked) {
@@ -207,7 +456,7 @@ export class ParticleUI {
     });
     
     // Emission shape select
-    this.emissionShapeSelect.addEventListener('change', () => {
+    this.emissionShapeSelect.addEventListener('change', this.onEmissionShapeChange = () => {
       this.config.emissionShape = this.emissionShapeSelect.value;
       
       if (this.config.emissionShape === 'cube') {
@@ -234,7 +483,7 @@ export class ParticleUI {
     });
     
     // Cube length slider
-    this.cubeLengthSlider.addEventListener('input', () => {
+    this.cubeLengthSlider.addEventListener('input', this.onCubeLengthChange = () => {
       const value = this.cubeLengthSlider.value;
       this.cubeLengthValue.textContent = value;
       this.config.outerLength = parseFloat(value);
@@ -248,7 +497,7 @@ export class ParticleUI {
     });
     
     // Inner length slider for cube
-    this.innerLengthSlider.addEventListener('input', () => {
+    this.innerLengthSlider.addEventListener('input', this.onInnerLengthChange = () => {
       const value = this.innerLengthSlider.value;
       this.innerLengthValue.textContent = value;
       this.config.innerLength = parseFloat(value);
@@ -262,7 +511,7 @@ export class ParticleUI {
     });
     
     // Inner radius slider
-    this.innerRadiusSlider.addEventListener('input', () => {
+    this.innerRadiusSlider.addEventListener('input', this.onInnerRadiusChange = () => {
       const value = this.innerRadiusSlider.value;
       this.innerRadiusValue.textContent = value;
       this.config.innerRadius = parseFloat(value);
@@ -276,7 +525,7 @@ export class ParticleUI {
     });
     
     // Outer radius slider
-    this.outerRadiusSlider.addEventListener('input', () => {
+    this.outerRadiusSlider.addEventListener('input', this.onOuterRadiusChange = () => {
       const value = this.outerRadiusSlider.value;
       this.outerRadiusValue.textContent = value;
       this.config.outerRadius = parseFloat(value);
@@ -290,7 +539,7 @@ export class ParticleUI {
     });
     
     // Bloom checkbox
-    this.bloomCheckbox.addEventListener('change', () => {
+    this.bloomCheckbox.addEventListener('change', this.onBloomChange = () => {
       this.config.bloomEnabled = this.bloomCheckbox.checked;
       
       // Show/hide the bloom intensity slider based on bloom enabled state
@@ -299,10 +548,15 @@ export class ParticleUI {
       } else {
         this.bloomIntensityContainer.classList.add('hidden');
       }
+      
+      // Call bloom intensity change to update the uniform buffer
+      if (this.config.onBloomIntensityChange) {
+        this.config.onBloomIntensityChange();
+      }
     });
     
     // Bloom intensity slider
-    this.bloomIntensitySlider.addEventListener('input', () => {
+    this.bloomIntensitySlider.addEventListener('input', this.onBloomIntensityChange = () => {
       this.config.bloomIntensity = parseFloat(this.bloomIntensitySlider.value);
       this.bloomIntensityValue.textContent = this.config.bloomIntensity.toFixed(1);
       
@@ -312,14 +566,14 @@ export class ParticleUI {
     });
     
     // Respawn button
-    this.respawnButton.addEventListener('click', () => {
+    this.respawnButton.addEventListener('click', this.onRespawnClick = () => {
       if (this.config.onRespawn) {
         this.config.onRespawn();
       }
     });
     
     // Square size slider
-    this.squareSizeSlider.addEventListener('input', () => {
+    this.squareSizeSlider.addEventListener('input', this.onSquareSizeChange = () => {
       const value = this.squareSizeSlider.value;
       this.squareSizeValue.textContent = value;
       this.config.squareSize = parseFloat(value);
@@ -333,7 +587,7 @@ export class ParticleUI {
     });
     
     // Square inner size slider
-    this.squareInnerSizeSlider.addEventListener('input', () => {
+    this.squareInnerSizeSlider.addEventListener('input', this.onSquareInnerSizeChange = () => {
       const value = this.squareInnerSizeSlider.value;
       this.squareInnerSizeValue.textContent = value;
       this.config.squareInnerSize = parseFloat(value);
@@ -347,7 +601,7 @@ export class ParticleUI {
     });
     
     // Circle inner radius slider
-    this.circleInnerRadiusSlider.addEventListener('input', () => {
+    this.circleInnerRadiusSlider.addEventListener('input', this.onCircleInnerRadiusChange = () => {
       const value = this.circleInnerRadiusSlider.value;
       this.circleInnerRadiusValue.textContent = value;
       this.config.circleInnerRadius = parseFloat(value);
@@ -361,7 +615,7 @@ export class ParticleUI {
     });
     
     // Circle outer radius slider
-    this.circleOuterRadiusSlider.addEventListener('input', () => {
+    this.circleOuterRadiusSlider.addEventListener('input', this.onCircleOuterRadiusChange = () => {
       const value = this.circleOuterRadiusSlider.value;
       this.circleOuterRadiusValue.textContent = value;
       this.config.circleOuterRadius = parseFloat(value);
@@ -373,6 +627,83 @@ export class ParticleUI {
         this.config.circleInnerRadius = parseFloat(this.circleInnerRadiusSlider.value);
       }
     });
+  }
+
+  // New method to remove all event listeners to prevent duplicates
+  removeAllEventListeners() {
+    // Only remove if the event listeners exist
+    if (this.onLifetimeChange) {
+      this.lifetimeSlider.removeEventListener('input', this.onLifetimeChange);
+    }
+    if (this.onEmissionDurationChange) {
+      this.emissionDurationSlider.removeEventListener('input', this.onEmissionDurationChange);
+    }
+    if (this.onEmissionRateChange) {
+      this.emissionRateSlider.removeEventListener('input', this.onEmissionRateChange);
+    }
+    if (this.onFadeChange) {
+      this.fadeCheckbox.removeEventListener('change', this.onFadeChange);
+    }
+    if (this.onColorTransitionChange) {
+      this.colorTransitionCheckbox.removeEventListener('change', this.onColorTransitionChange);
+    }
+    if (this.onParticleColorChange) {
+      this.particleColorInput.removeEventListener('input', this.onParticleColorChange);
+    }
+    if (this.onStartColorChange) {
+      this.startColorInput.removeEventListener('input', this.onStartColorChange);
+    }
+    if (this.onEndColorChange) {
+      this.endColorInput.removeEventListener('input', this.onEndColorChange);
+    }
+    if (this.onSizeChange) {
+      this.sizeSlider.removeEventListener('input', this.onSizeChange);
+    }
+    if (this.onSpeedChange) {
+      this.speedSlider.removeEventListener('input', this.onSpeedChange);
+    }
+    if (this.onParticleCountChange) {
+      this.particleCountSlider.removeEventListener('input', this.onParticleCountChange);
+    }
+    if (this.onBurstChange) {
+      this.burstCheckbox.removeEventListener('change', this.onBurstChange);
+    }
+    if (this.onEmissionShapeChange) {
+      this.emissionShapeSelect.removeEventListener('change', this.onEmissionShapeChange);
+    }
+    if (this.onCubeLengthChange) {
+      this.cubeLengthSlider.removeEventListener('input', this.onCubeLengthChange);
+    }
+    if (this.onInnerLengthChange) {
+      this.innerLengthSlider.removeEventListener('input', this.onInnerLengthChange);
+    }
+    if (this.onInnerRadiusChange) {
+      this.innerRadiusSlider.removeEventListener('input', this.onInnerRadiusChange);
+    }
+    if (this.onOuterRadiusChange) {
+      this.outerRadiusSlider.removeEventListener('input', this.onOuterRadiusChange);
+    }
+    if (this.onBloomChange) {
+      this.bloomCheckbox.removeEventListener('change', this.onBloomChange);
+    }
+    if (this.onBloomIntensityChange) {
+      this.bloomIntensitySlider.removeEventListener('input', this.onBloomIntensityChange);
+    }
+    if (this.onRespawnClick) {
+      this.respawnButton.removeEventListener('click', this.onRespawnClick);
+    }
+    if (this.onSquareSizeChange) {
+      this.squareSizeSlider.removeEventListener('input', this.onSquareSizeChange);
+    }
+    if (this.onSquareInnerSizeChange) {
+      this.squareInnerSizeSlider.removeEventListener('input', this.onSquareInnerSizeChange);
+    }
+    if (this.onCircleInnerRadiusChange) {
+      this.circleInnerRadiusSlider.removeEventListener('input', this.onCircleInnerRadiusChange);
+    }
+    if (this.onCircleOuterRadiusChange) {
+      this.circleOuterRadiusSlider.removeEventListener('input', this.onCircleOuterRadiusChange);
+    }
   }
 
   updateUIState() {

@@ -1,15 +1,19 @@
+// Import necessary modules
 import "./style.css";
 import { initWebGPU, createRenderTextures, createDepthTexture, createBuffer } from "./modules/webgpu.js";
-import { ParticleSystem } from "./modules/particleSystem.js";
+import { ParticleSystem, ParticleSystemManager } from "./modules/particleSystem.js";
 import { createBindGroupLayouts, createRenderPipelines, createBindGroups, createSampler } from "./modules/renderers.js";
 import { createLookAtMatrix, createProjectionMatrix, multiplyMatrices, hexToRgb } from "./modules/utils.js";
-import { ParticleUI, setupCameraControls } from "./modules/ui.js";
+import { ParticleUI, MultiSystemUI, setupCameraControls } from "./modules/ui.js";
 
 async function main() {
   // Initialize WebGPU
   const { device, context, format, canvas } = await initWebGPU();
   
-  // Initialize configuration state
+  // Create particle system manager
+  const particleSystemManager = new ParticleSystemManager(device);
+  
+  // Initialize configuration state for the first particle system
   const config = {
     // Camera control settings
     cameraRotationX: 0,
@@ -57,53 +61,19 @@ async function main() {
     // Mode settings
     burstMode: false,
     
-    // Callback methods for UI interactions
-    onAppearanceChange: updateAppearanceUniform,
-    onColorChange: updateParticleColors,
-    onSizeChange: updateQuadGeometry,
-    onSpeedChange: updateParticleVelocities,
-    onBloomIntensityChange: updateBloomIntensity,
-    onRespawn: spawnParticles
+    // Default name for the first system
+    name: 'System 1',
+    
+    // Callback methods for UI interactions - will be updated later
+    onAppearanceChange: null,
+    onColorChange: null,
+    onSizeChange: null,
+    onSpeedChange: null,
+    onBloomIntensityChange: null,
+    onRespawn: null
   };
   
-  // Set up UI elements
-  const ui = new ParticleUI(config);
-  
-  // Set up camera controls
-  setupCameraControls(canvas, config);
-  
-  // Create render textures
-  let { sceneTexture, bloomTexA, bloomTexB } = createRenderTextures(device, format, canvas.width, canvas.height);
-  
-  // Create depth texture
-  let depthTexture = createDepthTexture(device, canvas.width, canvas.height);
-  
-  // Create quad geometry for billboards
-  const quadVertices = new Float32Array([
-    -config.particleSize, -config.particleSize, 0,
-    config.particleSize, -config.particleSize, 0,
-    config.particleSize, config.particleSize, 0,
-    -config.particleSize, config.particleSize, 0
-  ]);
-  
-  const quadIndices = new Uint16Array([
-    0, 1, 2,
-    2, 3, 0
-  ]);
-  
   // Create buffers
-  const quadVertexBuffer = createBuffer(
-    device, 
-    quadVertices, 
-    GPUBufferUsage.VERTEX
-  );
-  
-  const quadIndexBuffer = createBuffer(
-    device, 
-    quadIndices, 
-    GPUBufferUsage.INDEX
-  );
-  
   const uniformBuffer = device.createBuffer({
     size: 80, // MVP matrix + camera position + aspect
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -130,6 +100,77 @@ async function main() {
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   
+  // Create the first particle system
+  particleSystemManager.createParticleSystem(config);
+  
+  // Create function to handle UI configuration updates when switching between systems
+  let currentUI = null;
+  
+  function onSystemSelected(index) {
+    // Get the configuration of the selected system
+    const selectedConfig = particleSystemManager.particleSystems[index].config;
+    
+    // Clean up any existing UI
+    if (currentUI) {
+      currentUI.removeAllEventListeners();
+    }
+    
+    // Create a new UI with the selected system's config
+    currentUI = new ParticleUI(selectedConfig);
+    
+    // Update callback methods to point to the right system
+    const activeSystem = particleSystemManager.getActiveSystem();
+    
+    // Set up callbacks specific to this system
+    selectedConfig.onAppearanceChange = () => {
+      // Update this specific system's appearance uniform buffer
+      const system = particleSystemManager.particleSystems[index].system;
+      system.updateAppearanceUniform();
+    };
+    
+    selectedConfig.onColorChange = () => {
+      if (activeSystem) {
+        activeSystem.updateParticleColors();
+        // Also update the appearance buffer to ensure consistent colors
+        activeSystem.updateAppearanceUniform();
+      }
+    };
+    
+    selectedConfig.onSizeChange = (size) => {
+      // We still use a global quad vertex buffer for all systems as an optimization
+      // Only need to update it once for the active system
+      updateQuadGeometry(size);
+    };
+    
+    selectedConfig.onSpeedChange = () => {
+      if (activeSystem) {
+        activeSystem.updateParticleVelocities();
+      }
+    };
+    
+    selectedConfig.onBloomIntensityChange = () => {
+      updateBloomIntensity(selectedConfig);
+    };
+    
+    selectedConfig.onRespawn = () => {
+      if (activeSystem) {
+        activeSystem.spawnParticles();
+      }
+    };
+    
+    // Initialize appearance uniform buffer for this system
+    updateAppearanceUniform(selectedConfig);
+    
+    // Update bloom intensity
+    updateBloomIntensity(selectedConfig);
+    
+    // Update Respawn All button to respawn all systems
+    const respawnButton = document.getElementById('respawn-button');
+    if (respawnButton) {
+      respawnButton.onclick = () => particleSystemManager.respawnAllSystems();
+    }
+  }
+  
   // Initialize buffer data
   const horizontalDirection = new Float32Array([1.0, 0.0, canvas.width, canvas.height, 0.0, 0.0, 0.0, 0.0]);
   const verticalDirection = new Float32Array([0.0, 1.0, canvas.width, canvas.height, 0.0, 0.0, 0.0, 0.0]);
@@ -154,8 +195,37 @@ async function main() {
     directRenderPipeline
   } = createRenderPipelines(device, format, layouts);
   
-  // Create particle system
-  const particleSystem = new ParticleSystem(device, config);
+  // Create render textures
+  let { sceneTexture, bloomTexA, bloomTexB } = createRenderTextures(device, format, canvas.width, canvas.height);
+  
+  // Create depth texture
+  let depthTexture = createDepthTexture(device, canvas.width, canvas.height);
+  
+  // Create quad geometry for billboards
+  const quadVertices = new Float32Array([
+    -config.particleSize, -config.particleSize, 0,
+    config.particleSize, -config.particleSize, 0,
+    config.particleSize, config.particleSize, 0,
+    -config.particleSize, config.particleSize, 0
+  ]);
+  
+  const quadIndices = new Uint16Array([
+    0, 1, 2,
+    2, 3, 0
+  ]);
+  
+  // Create vertex and index buffers
+  const quadVertexBuffer = createBuffer(
+    device, 
+    quadVertices, 
+    GPUBufferUsage.VERTEX
+  );
+  
+  const quadIndexBuffer = createBuffer(
+    device, 
+    quadIndices, 
+    GPUBufferUsage.INDEX
+  );
   
   // Create bind groups
   const buffers = {
@@ -174,14 +244,20 @@ async function main() {
   
   let bindGroups = createBindGroups(device, sampler, buffers, textures);
   
-  // Initialize appearance uniform buffer
-  updateAppearanceUniform();
+  // Create multi-system UI
+  const multiSystemUI = new MultiSystemUI(particleSystemManager, onSystemSelected);
+  
+  // Initialize the first system UI after bind groups are created
+  onSystemSelected(0);
+  
+  // Set up camera controls
+  setupCameraControls(canvas, config);
   
   // Resize handler for window resizing
   window.addEventListener('resize', resizeCanvasToDisplaySize);
   
   // Initialize particles and start animation
-  spawnParticles();
+  particleSystemManager.respawnAllSystems();
   let lastTime = performance.now();
   requestAnimationFrame(frame);
   
@@ -190,8 +266,8 @@ async function main() {
     const deltaTime = (currentTime - lastTime) / 1000;
     lastTime = currentTime;
     
-    // Update particle state
-    particleSystem.updateParticles(deltaTime);
+    // Update all particle systems
+    particleSystemManager.updateAllSystems(deltaTime);
     
     const aspect = canvas.height / canvas.width;
     const projectionMatrix = createProjectionMatrix(aspect);
@@ -217,6 +293,10 @@ async function main() {
     device.queue.writeBuffer(uniformBuffer, 0, mvpMatrix);
     device.queue.writeBuffer(uniformBuffer, 64, new Float32Array([cameraX, cameraY, cameraZ, aspect]));
     
+    // Get the current active config for rendering settings
+    const activeConfig = particleSystemManager.getActiveConfig();
+    const bloomEnabled = activeConfig ? activeConfig.bloomEnabled : config.bloomEnabled;
+    
     // Render frame
     const commandEncoder = device.createCommandEncoder();
     
@@ -236,22 +316,35 @@ async function main() {
       },
     };
     
-    // Render particles to scene texture with transparency
+    // Render all particles from all systems to scene texture with transparency
     const scenePassEncoder = commandEncoder.beginRenderPass(sceneRenderPassDescriptor);
     scenePassEncoder.setPipeline(particlePipeline);
-    scenePassEncoder.setBindGroup(0, bindGroups.particleBindGroup);
-    
     scenePassEncoder.setVertexBuffer(0, quadVertexBuffer);
-    scenePassEncoder.setVertexBuffer(1, particleSystem.instanceBuffer);
     scenePassEncoder.setIndexBuffer(quadIndexBuffer, 'uint16');
     
-    if (particleSystem.activeParticles > 0) {
-      scenePassEncoder.drawIndexed(6, particleSystem.activeParticles);
+    // Render each particle system with its own appearance settings
+    for (const { system } of particleSystemManager.particleSystems) {
+      if (system.activeParticles > 0) {
+        // Create a system-specific bind group that uses this system's appearance buffer
+        const systemBindGroup = device.createBindGroup({
+          layout: layouts.particleBindGroupLayout,
+          entries: [
+            { binding: 0, resource: { buffer: uniformBuffer } },
+            { binding: 1, resource: { buffer: system.appearanceUniformBuffer } }
+          ]
+        });
+        
+        // Set the bind group specific to this system
+        scenePassEncoder.setBindGroup(0, systemBindGroup);
+        scenePassEncoder.setVertexBuffer(1, system.instanceBuffer);
+        scenePassEncoder.drawIndexed(6, system.activeParticles);
+      }
     }
     
     scenePassEncoder.end();
     
-    if (config.bloomEnabled) {
+    // Handle bloom effect
+    if (bloomEnabled) {
       // Apply multiple blur passes for higher quality bloom
       // First ping-pong between textures for multiple passes
       for (let i = 0; i < 3; i++) {
@@ -331,7 +424,7 @@ async function main() {
     
     const compositePassEncoder = commandEncoder.beginRenderPass(compositePassDescriptor);
     
-    if (config.bloomEnabled) {
+    if (bloomEnabled) {
       // If bloom is enabled, use the composite pipeline to blend original and blurred textures
       compositePassEncoder.setPipeline(compositePipeline);
       compositePassEncoder.setBindGroup(0, bindGroups.compositeBindGroup);
@@ -406,43 +499,32 @@ async function main() {
   }
   
   // Function to update appearance settings in the uniform buffer
-  function updateAppearanceUniform() {
+  function updateAppearanceUniform(systemConfig) {
+    if (!systemConfig) return;
+    
     const appearanceData = new Float32Array([
-      config.fadeEnabled ? 1.0 : 0.0,
-      config.colorTransitionEnabled ? 1.0 : 0.0,
-      config.particleSize,
+      systemConfig.fadeEnabled ? 1.0 : 0.0,
+      systemConfig.colorTransitionEnabled ? 1.0 : 0.0,
+      systemConfig.particleSize,
       0.0, // padding
       // Single color (vec3 + padding)
-      config.particleColor[0], config.particleColor[1], config.particleColor[2], 0.0,
+      systemConfig.particleColor[0], systemConfig.particleColor[1], systemConfig.particleColor[2], 0.0,
       // Start color (vec3 + padding)
-      config.startColor[0], config.startColor[1], config.startColor[2], 0.0,
+      systemConfig.startColor[0], systemConfig.startColor[1], systemConfig.startColor[2], 0.0,
       // End color (vec3 + padding)
-      config.endColor[0], config.endColor[1], config.endColor[2], 0.0
+      systemConfig.endColor[0], systemConfig.endColor[1], systemConfig.endColor[2], 0.0
     ]);
     
     device.queue.writeBuffer(appearanceUniformBuffer, 0, appearanceData);
   }
   
   // Function to update bloom intensity
-  function updateBloomIntensity() {
+  function updateBloomIntensity(systemConfig) {
+    if (!systemConfig) return;
+    
     const bloomIntensityData = new Float32Array(16).fill(0);
-    bloomIntensityData[0] = config.bloomIntensity;
+    bloomIntensityData[0] = systemConfig.bloomIntensity;
     device.queue.writeBuffer(bloomIntensityBuffer, 0, bloomIntensityData);
-  }
-  
-  // Function to update particle velocities based on speed changes
-  function updateParticleVelocities() {
-    particleSystem.updateParticleVelocities();
-  }
-  
-  // Function to update particle colors
-  function updateParticleColors() {
-    particleSystem.updateParticleColors();
-  }
-  
-  // Function to spawn particles
-  function spawnParticles() {
-    particleSystem.spawnParticles();
   }
 }
 
