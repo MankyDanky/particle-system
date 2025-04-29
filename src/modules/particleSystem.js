@@ -13,10 +13,6 @@ export class ParticleSystem {
     this.activeParticles = 0;
     this.emitting = false;
     this.currentEmissionTime = 0;
-    this.emissionTimer = 0;
-    this.emissionRemainder = 0; // Store leftover fractional particles
-    this.totalParticlesToEmit = 0; // Track total particles to emit over duration
-    this.particlesEmittedSoFar = 0; // Track how many we've emitted so far
     
     // Create typed arrays for particle data and velocities
     this.particleData = new Float32Array(this.MAX_PARTICLES * 8); // [x, y, z, r, g, b, age, lifetime]
@@ -140,9 +136,6 @@ export class ParticleSystem {
     // Reset counters
     this.activeParticles = 0;
     this.currentEmissionTime = 0;
-    this.emissionTimer = 0;
-    this.emissionRemainder = 0;
-    this.particlesEmittedSoFar = 0;
     
     if (this.config.burstMode) {
       // Burst mode: emit all particles at once
@@ -192,14 +185,10 @@ export class ParticleSystem {
       // Continuous emission mode
       this.emitting = true;
       
-      // Calculate the total number of particles to emit over the full duration
-      this.totalParticlesToEmit = Math.ceil(this.config.emissionRate * this.config.emissionDuration);
-      
-      // Ensure we don't exceed our maximum capacity
-      this.totalParticlesToEmit = Math.min(this.totalParticlesToEmit, this.MAX_PARTICLES);
-      
-      // Set particle count to ensure we have capacity for all particles over the duration
-      this.particleCount = this.totalParticlesToEmit;
+      // Calculate max particles based on emission rate and duration
+      const baseLifetime = this.config.lifetime || 5;
+      const effectiveDuration = Math.max(this.config.emissionDuration || 10, baseLifetime);
+      this.particleCount = Math.min(Math.ceil((this.config.emissionRate || 10) * effectiveDuration), this.MAX_PARTICLES);
     }
   }
 
