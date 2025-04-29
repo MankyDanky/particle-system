@@ -30,6 +30,8 @@ async function main() {
     emissionDuration: 10,
     emissionShape: 'cube',
     cubeLength: 2.0,
+    innerLength: 0.0,
+    outerLength: 2.0,
     innerRadius: 0.0,
     outerRadius: 2.0,
     particleSize: 0.5,

@@ -48,6 +48,8 @@ export class ParticleUI {
     this.sphereSettings = document.getElementById('sphere-settings');
     this.cubeLengthSlider = document.getElementById('cube-length-slider');
     this.cubeLengthValue = document.getElementById('cube-length-value');
+    this.innerLengthSlider = document.getElementById('inner-length-slider');
+    this.innerLengthValue = document.getElementById('inner-length-value');
     this.innerRadiusSlider = document.getElementById('inner-radius-slider');
     this.innerRadiusValue = document.getElementById('inner-radius-value');
     this.outerRadiusSlider = document.getElementById('outer-radius-slider');
@@ -207,7 +209,28 @@ export class ParticleUI {
     this.cubeLengthSlider.addEventListener('input', () => {
       const value = this.cubeLengthSlider.value;
       this.cubeLengthValue.textContent = value;
-      this.config.cubeLength = parseFloat(value);
+      this.config.outerLength = parseFloat(value);
+      
+      // Make sure outer length is greater than inner length
+      if (this.config.outerLength <= this.config.innerLength) {
+        this.innerLengthSlider.value = this.config.outerLength - 0.1;
+        this.innerLengthValue.textContent = this.innerLengthSlider.value;
+        this.config.innerLength = parseFloat(this.innerLengthSlider.value);
+      }
+    });
+    
+    // Inner length slider for cube
+    this.innerLengthSlider.addEventListener('input', () => {
+      const value = this.innerLengthSlider.value;
+      this.innerLengthValue.textContent = value;
+      this.config.innerLength = parseFloat(value);
+      
+      // Make sure inner length is less than outer length
+      if (this.config.innerLength >= this.config.outerLength) {
+        this.cubeLengthSlider.value = this.config.innerLength + 0.1;
+        this.cubeLengthValue.textContent = this.cubeLengthSlider.value;
+        this.config.outerLength = parseFloat(this.cubeLengthSlider.value);
+      }
     });
     
     // Inner radius slider
@@ -300,8 +323,8 @@ export class ParticleUI {
     this.cubeLengthSlider.value = this.config.cubeLength;
     this.cubeLengthValue.textContent = this.config.cubeLength;
     
-    this.innerRadiusSlider.value = this.config.innerRadius;
-    this.innerRadiusValue.textContent = this.config.innerRadius;
+    this.innerLengthSlider.value = this.config.innerLength;
+    this.innerLengthValue.textContent = this.config.innerLength;
     
     this.outerRadiusSlider.value = this.config.outerRadius;
     this.outerRadiusValue.textContent = this.config.outerRadius;

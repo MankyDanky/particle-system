@@ -199,10 +199,65 @@ export class ParticleSystem {
     let posX, posY, posZ;
     
     if (this.config.emissionShape === 'cube') {
-      // Generate random position within a cube
-      posX = (Math.random() - 0.5) * this.config.cubeLength;
-      posY = (Math.random() - 0.5) * this.config.cubeLength;
-      posZ = (Math.random() - 0.5) * this.config.cubeLength;
+      // Generate random position within a cube shell
+      let innerLength = this.config.innerLength || 0;
+      let outerLength = this.config.outerLength || this.config.cubeLength;
+      
+      if (innerLength > 0) {
+        // Generate position in a cube shell (between inner and outer length)
+        // First get random position on a unit cube (-0.5 to 0.5)
+        const sides = Math.floor(Math.random() * 6); // Choose one of 6 cube faces
+        const u = Math.random() - 0.5; // -0.5 to 0.5
+        const v = Math.random() - 0.5; // -0.5 to 0.5
+        
+        // Generate points on the selected face of a unit cube
+        switch(sides) {
+          case 0: // Front face (z = 0.5)
+            posX = u;
+            posY = v;
+            posZ = 0.5;
+            break;
+          case 1: // Back face (z = -0.5)
+            posX = u;
+            posY = v;
+            posZ = -0.5;
+            break;
+          case 2: // Right face (x = 0.5)
+            posX = 0.5;
+            posY = u;
+            posZ = v;
+            break;
+          case 3: // Left face (x = -0.5)
+            posX = -0.5;
+            posY = u;
+            posZ = v;
+            break;
+          case 4: // Top face (y = 0.5)
+            posX = u;
+            posY = 0.5;
+            posZ = v;
+            break;
+          case 5: // Bottom face (y = -0.5)
+            posX = u;
+            posY = -0.5;
+            posZ = v;
+            break;
+        }
+        
+        // Interpolate between inner and outer length
+        const t = Math.random();
+        const length = innerLength + t * (outerLength - innerLength);
+        
+        // Scale unit cube points to the shell size
+        posX *= length;
+        posY *= length;
+        posZ *= length;
+      } else {
+        // Original solid cube generation using outer length
+        posX = (Math.random() - 0.5) * outerLength;
+        posY = (Math.random() - 0.5) * outerLength;
+        posZ = (Math.random() - 0.5) * outerLength;
+      }
     } else if (this.config.emissionShape === 'sphere') {
       // Generate random position within a sphere shell
       let theta = Math.random() * 2 * Math.PI; // azimuthal angle
@@ -534,10 +589,65 @@ export class ParticleSystem {
     let posX, posY, posZ;
     
     if (this.config.emissionShape === 'cube') {
-      // Generate random position within a cube
-      posX = (Math.random() - 0.5) * this.config.cubeLength;
-      posY = (Math.random() - 0.5) * this.config.cubeLength;
-      posZ = (Math.random() - 0.5) * this.config.cubeLength;
+      // Generate random position within a cube shell
+      let innerLength = this.config.innerLength || 0;
+      let outerLength = this.config.outerLength || this.config.cubeLength;
+      
+      if (innerLength > 0) {
+        // Generate position in a cube shell (between inner and outer length)
+        // First get random position on a unit cube (-0.5 to 0.5)
+        const sides = Math.floor(Math.random() * 6); // Choose one of 6 cube faces
+        const u = Math.random() - 0.5; // -0.5 to 0.5
+        const v = Math.random() - 0.5; // -0.5 to 0.5
+        
+        // Generate points on the selected face of a unit cube
+        switch(sides) {
+          case 0: // Front face (z = 0.5)
+            posX = u;
+            posY = v;
+            posZ = 0.5;
+            break;
+          case 1: // Back face (z = -0.5)
+            posX = u;
+            posY = v;
+            posZ = -0.5;
+            break;
+          case 2: // Right face (x = 0.5)
+            posX = 0.5;
+            posY = u;
+            posZ = v;
+            break;
+          case 3: // Left face (x = -0.5)
+            posX = -0.5;
+            posY = u;
+            posZ = v;
+            break;
+          case 4: // Top face (y = 0.5)
+            posX = u;
+            posY = 0.5;
+            posZ = v;
+            break;
+          case 5: // Bottom face (y = -0.5)
+            posX = u;
+            posY = -0.5;
+            posZ = v;
+            break;
+        }
+        
+        // Interpolate between inner and outer length
+        const t = Math.random();
+        const length = innerLength + t * (outerLength - innerLength);
+        
+        // Scale unit cube points to the shell size
+        posX *= length;
+        posY *= length;
+        posZ *= length;
+      } else {
+        // Original solid cube generation using outer length
+        posX = (Math.random() - 0.5) * outerLength;
+        posY = (Math.random() - 0.5) * outerLength;
+        posZ = (Math.random() - 0.5) * outerLength;
+      }
     } else if (this.config.emissionShape === 'sphere') {
       // Generate random position within a sphere shell
       let theta = Math.random() * 2 * Math.PI; // azimuthal angle
