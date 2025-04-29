@@ -14,6 +14,54 @@ async function main() {
   // Create particle system manager
   const particleSystemManager = new ParticleSystemManager(device);
   
+  // Texture cache for bloom effects
+  const textureCache = {
+    bloomSourceTextures: [],
+    bloomCompositeTextures: [],
+    combinedTexture: null,
+    getBloomSourceTexture: function(index, width, height) {
+      if (!this.bloomSourceTextures[index]) {
+        this.bloomSourceTextures[index] = device.createTexture({
+          size: [width, height],
+          format: format,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+        });
+      }
+      return this.bloomSourceTextures[index];
+    },
+    getBloomCompositeTexture: function(index, width, height) {
+      if (!this.bloomCompositeTextures[index]) {
+        this.bloomCompositeTextures[index] = device.createTexture({
+          size: [width, height],
+          format: format,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+        });
+      }
+      return this.bloomCompositeTextures[index];
+    },
+    getCombinedTexture: function(width, height) {
+      if (!this.combinedTexture) {
+        this.combinedTexture = device.createTexture({
+          size: [width, height],
+          format: format,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+        });
+      }
+      return this.combinedTexture;
+    },
+    resizeTextures: function(width, height) {
+      // Clean up old textures
+      this.bloomSourceTextures.forEach(texture => texture?.destroy());
+      this.bloomCompositeTextures.forEach(texture => texture?.destroy());
+      if (this.combinedTexture) this.combinedTexture.destroy();
+      
+      // Reset arrays
+      this.bloomSourceTextures = [];
+      this.bloomCompositeTextures = [];
+      this.combinedTexture = null;
+    }
+  };
+  
   // Initialize configuration state for the first particle system
   const config = {
     // Camera control settings
@@ -301,9 +349,6 @@ async function main() {
       ({ config }) => config.bloomEnabled
     );
     
-    // Track textures that need to be destroyed after frame completion
-    let texturesToDestroy = [];
-    
     // Render frame
     const commandEncoder = device.createCommandEncoder();
     
@@ -359,27 +404,15 @@ async function main() {
         ({ config }) => config.bloomEnabled
       );
       
-      // Create temporary textures for each bloom system
-      const bloomSystemTextures = [];
-      const bloomCompositedTextures = [];
-      
       // Process each bloom-enabled system with its own intensity
       for (let i = 0; i < bloomSystems.length; i++) {
         const { system, config } = bloomSystems[i];
         
         if (system.activeParticles === 0) continue;
         
-        // Create a source texture for this specific system's particles
-        const bloomSourceTexture = device.createTexture({
-          size: [canvas.width, canvas.height],
-          format: format,
-          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
-        });
+        // Render this system's particles to its own texture - use cached texture
+        const bloomSourceTexture = textureCache.getBloomSourceTexture(i, canvas.width, canvas.height);
         
-        // Add to list for cleanup
-        texturesToDestroy.push(bloomSourceTexture);
-        
-        // Render this system's particles to its own texture
         const bloomSystemRenderPassDescriptor = {
           colorAttachments: [{
             view: bloomSourceTexture.createView(),
@@ -413,9 +446,6 @@ async function main() {
         bloomSystemEncoder.setVertexBuffer(1, system.instanceBuffer);
         bloomSystemEncoder.drawIndexed(6, system.activeParticles);
         bloomSystemEncoder.end();
-        
-        // Store the source texture for this system
-        bloomSystemTextures.push(bloomSourceTexture);
         
         // Set bloom intensity for this specific system
         const bloomIntensityData = new Float32Array(16).fill(0);
@@ -489,14 +519,7 @@ async function main() {
         secondVerticalBlurPassEncoder.end();
         
         // Create a composited bloom texture for this system (with its specific intensity)
-        const systemBloomCompositeTexture = device.createTexture({
-          size: [canvas.width, canvas.height],
-          format: format,
-          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
-        });
-        
-        // Add to list for cleanup
-        texturesToDestroy.push(systemBloomCompositeTexture);
+        const systemBloomCompositeTexture = textureCache.getBloomCompositeTexture(i, canvas.width, canvas.height);
         
         // Apply this system's bloom intensity by compositing the source with the blurred result
         const systemCompositePassDescriptor = {
@@ -525,136 +548,92 @@ async function main() {
         systemCompositeEncoder.setBindGroup(0, systemBloomCompositeBindGroup);
         systemCompositeEncoder.draw(3);
         systemCompositeEncoder.end();
-        
-        // Store the composited bloom texture for this system
-        bloomCompositedTextures.push(systemBloomCompositeTexture);
       }
+    }
+    
+    // Create a combined texture for all particles (non-bloom and bloom)
+    const combinedTexture = textureCache.getCombinedTexture(canvas.width, canvas.height);
+    
+    // Start with non-bloom particles
+    const combinedPassDescriptor = {
+      colorAttachments: [{
+        view: combinedTexture.createView(),
+        loadOp: 'clear',
+        storeOp: 'store',
+        clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
+      }],
+    };
+    
+    const combinedPassEncoder = commandEncoder.beginRenderPass(combinedPassDescriptor);
+    combinedPassEncoder.setPipeline(directRenderPipeline);
+    
+    // Add non-bloom particles first
+    const nonBloomBindGroup = device.createBindGroup({
+      layout: layouts.compositeBindGroupLayout,
+      entries: [
+        { binding: 0, resource: sampler },
+        { binding: 1, resource: sceneTexture.createView() },
+        { binding: 2, resource: sceneTexture.createView() },
+        { binding: 3, resource: { buffer: bloomIntensityBuffer } }
+      ]
+    });
+    
+    combinedPassEncoder.setBindGroup(0, nonBloomBindGroup);
+    combinedPassEncoder.draw(3);
+    
+    // Then add each bloom system's composited particles
+    for (let i = 0; i < particleSystemManager.particleSystems.length; i++) {
+      const { config } = particleSystemManager.particleSystems[i];
+      if (!config.bloomEnabled) continue;
       
-      // Create a combined texture for all particles (non-bloom and bloom)
-      const combinedTexture = device.createTexture({
-        size: [canvas.width, canvas.height],
-        format: format,
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
-      });
-      
-      // Add to cleanup list
-      texturesToDestroy.push(combinedTexture);
-      
-      // Start with non-bloom particles
-      const combinedPassDescriptor = {
-        colorAttachments: [{
-          view: combinedTexture.createView(),
-          loadOp: 'clear',
-          storeOp: 'store',
-          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
-        }],
-      };
-      
-      const combinedPassEncoder = commandEncoder.beginRenderPass(combinedPassDescriptor);
+      // Set to additive blending
       combinedPassEncoder.setPipeline(directRenderPipeline);
       
-      // Add non-bloom particles first
-      const nonBloomBindGroup = device.createBindGroup({
+      // Create a bloom composite bind group
+      const bloomCompositeBindGroup = device.createBindGroup({
         layout: layouts.compositeBindGroupLayout,
         entries: [
           { binding: 0, resource: sampler },
-          { binding: 1, resource: sceneTexture.createView() },
+          { binding: 1, resource: textureCache.getBloomCompositeTexture(i, canvas.width, canvas.height).createView() },
           { binding: 2, resource: sceneTexture.createView() },
           { binding: 3, resource: { buffer: bloomIntensityBuffer } }
         ]
       });
       
-      combinedPassEncoder.setBindGroup(0, nonBloomBindGroup);
+      combinedPassEncoder.setBindGroup(0, bloomCompositeBindGroup);
       combinedPassEncoder.draw(3);
-      
-      // Then add each bloom system's composited particles
-      for (const bloomTexture of bloomCompositedTextures) {
-        // Set to additive blending
-        combinedPassEncoder.setPipeline(directRenderPipeline);
-        
-        // Create a bloom composite bind group
-        const bloomCompositeBindGroup = device.createBindGroup({
-          layout: layouts.compositeBindGroupLayout,
-          entries: [
-            { binding: 0, resource: sampler },
-            { binding: 1, resource: bloomTexture.createView() },
-            { binding: 2, resource: sceneTexture.createView() },
-            { binding: 3, resource: { buffer: bloomIntensityBuffer } }
-          ]
-        });
-        
-        combinedPassEncoder.setBindGroup(0, bloomCompositeBindGroup);
-        combinedPassEncoder.draw(3);
-      }
-      
-      combinedPassEncoder.end();
-      
-      // Final composite pass - blend the combined particle result onto a solid background
-      const finalPassDescriptor = {
-        colorAttachments: [{
-          view: context.getCurrentTexture().createView(),
-          loadOp: 'clear',
-          storeOp: 'store',
-          clearValue: { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }, // Background color
-        }],
-      };
-      
-      const finalPassEncoder = commandEncoder.beginRenderPass(finalPassDescriptor);
-      finalPassEncoder.setPipeline(directRenderPipeline);
-      
-      const finalBindGroup = device.createBindGroup({
-        layout: layouts.compositeBindGroupLayout,
-        entries: [
-          { binding: 0, resource: sampler },
-          { binding: 1, resource: combinedTexture.createView() },
-          { binding: 2, resource: sceneTexture.createView() }, // Unused
-          { binding: 3, resource: { buffer: bloomIntensityBuffer } }
-        ]
-      });
-      
-      finalPassEncoder.setBindGroup(0, finalBindGroup);
-      finalPassEncoder.draw(3);
-      finalPassEncoder.end();
-    } else {
-      // No bloom systems - simple direct render to screen
-      const finalPassDescriptor = {
-        colorAttachments: [{
-          view: context.getCurrentTexture().createView(),
-          loadOp: 'clear',
-          storeOp: 'store',
-          clearValue: { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }, // Background color
-        }],
-      };
-      
-      const finalPassEncoder = commandEncoder.beginRenderPass(finalPassDescriptor);
-      finalPassEncoder.setPipeline(directRenderPipeline);
-      
-      // Use the non-bloom scene texture
-      const finalBindGroup = device.createBindGroup({
-        layout: layouts.compositeBindGroupLayout,
-        entries: [
-          { binding: 0, resource: sampler },
-          { binding: 1, resource: sceneTexture.createView() },
-          { binding: 2, resource: sceneTexture.createView() }, // Unused
-          { binding: 3, resource: { buffer: bloomIntensityBuffer } }
-        ]
-      });
-      
-      finalPassEncoder.setBindGroup(0, finalBindGroup);
-      finalPassEncoder.draw(3);
-      finalPassEncoder.end();
     }
+    
+    combinedPassEncoder.end();
+    
+    // Final composite pass - blend the combined particle result onto a solid background
+    const finalPassDescriptor = {
+      colorAttachments: [{
+        view: context.getCurrentTexture().createView(),
+        loadOp: 'clear',
+        storeOp: 'store',
+        clearValue: { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }, // Background color
+      }],
+    };
+    
+    const finalPassEncoder = commandEncoder.beginRenderPass(finalPassDescriptor);
+    finalPassEncoder.setPipeline(directRenderPipeline);
+    
+    const finalBindGroup = device.createBindGroup({
+      layout: layouts.compositeBindGroupLayout,
+      entries: [
+        { binding: 0, resource: sampler },
+        { binding: 1, resource: combinedTexture.createView() },
+        { binding: 2, resource: sceneTexture.createView() }, // Unused
+        { binding: 3, resource: { buffer: bloomIntensityBuffer } }
+      ]
+    });
+    
+    finalPassEncoder.setBindGroup(0, finalBindGroup);
+    finalPassEncoder.draw(3);
+    finalPassEncoder.end();
     
     device.queue.submit([commandEncoder.finish()]);
-    
-    // Schedule texture destruction for the next frame
-    if (texturesToDestroy.length > 0) {
-      requestAnimationFrame(() => {
-        for (const texture of texturesToDestroy) {
-          texture.destroy();
-        }
-      });
-    }
     
     requestAnimationFrame(frame);
   }
@@ -693,6 +672,9 @@ async function main() {
     };
     
     bindGroups = createBindGroups(device, sampler, buffers, textures);
+    
+    // Resize cached textures to match new window size
+    textureCache.resizeTextures(canvas.width, canvas.height);
     
     // Schedule the old textures for destruction after the current frame completes
     requestAnimationFrame(() => {
