@@ -372,9 +372,10 @@ export class ParticleSystem {
     }
     
     // Store the position
-    this.particleData[index] = posX;
-    this.particleData[index + 1] = posY;
-    this.particleData[index + 2] = posZ;
+    const particleIndex = this.activeParticles * 8;
+    this.particleData[particleIndex] = posX;
+    this.particleData[particleIndex + 1] = posY;
+    this.particleData[particleIndex + 2] = posZ;
     
     // Create a stable velocity direction that won't be recalculated during physics updates
     // We'll use a consistent approach to determine initial velocity direction
@@ -409,19 +410,19 @@ export class ParticleSystem {
     
     // Color
     if (this.config.colorTransitionEnabled) {
-      this.particleData[index + 3] = this.config.startColor[0];
-      this.particleData[index + 4] = this.config.startColor[1];
-      this.particleData[index + 5] = this.config.startColor[2];
+      this.particleData[particleIndex + 3] = this.config.startColor[0];
+      this.particleData[particleIndex + 4] = this.config.startColor[1];
+      this.particleData[particleIndex + 5] = this.config.startColor[2];
     } else {
-      this.particleData[index + 3] = this.config.particleColor[0];
-      this.particleData[index + 4] = this.config.particleColor[1];
-      this.particleData[index + 5] = this.config.particleColor[2];
+      this.particleData[particleIndex + 3] = this.config.particleColor[0];
+      this.particleData[particleIndex + 4] = this.config.particleColor[1];
+      this.particleData[particleIndex + 5] = this.config.particleColor[2];
     }
     
     // Age and lifetime - set a lifetime from the config with small variance
     const baseLifetime = this.config.lifetime || 5;
-    this.particleData[index + 6] = 0; // Age starts at 0
-    this.particleData[index + 7] = baseLifetime + (Math.random() * 0.4 - 0.2) * baseLifetime; // Add up to ±20% variance
+    this.particleData[particleIndex + 6] = 0; // Age starts at 0
+    this.particleData[particleIndex + 7] = baseLifetime + (Math.random() * 0.4 - 0.2) * baseLifetime; // Add up to ±20% variance
     
     this.activeParticles++;
     return true;
@@ -821,16 +822,17 @@ export class ParticleSystem {
     }
     
     // Store the position
-    this.particleData[index] = posX;
-    this.particleData[index + 1] = posY;
-    this.particleData[index + 2] = posZ;
+    const particleIndex = newIndex * 8;
+    this.particleData[particleIndex] = posX;
+    this.particleData[particleIndex + 1] = posY;
+    this.particleData[particleIndex + 2] = posZ;
     
     // Create a stable velocity direction that won't be recalculated during physics updates
     // We'll use a consistent approach to determine initial velocity direction
     
     // Initialize a random but consistent direction vector for this particle
     // This ensures smoother movement at all emission rates
-    const velIndex = this.activeParticles * 4;
+    const velIndex = newIndex * 4;
     
     // First try: Use position to create an outward direction from origin
     const length = Math.sqrt(posX * posX + posY * posY + posZ * posZ);
@@ -858,22 +860,19 @@ export class ParticleSystem {
     
     // Color
     if (this.config.colorTransitionEnabled) {
-      this.particleData[index + 3] = this.config.startColor[0];
-      this.particleData[index + 4] = this.config.startColor[1];
-      this.particleData[index + 5] = this.config.startColor[2];
+      this.particleData[particleIndex + 3] = this.config.startColor[0];
+      this.particleData[particleIndex + 4] = this.config.startColor[1];
+      this.particleData[particleIndex + 5] = this.config.startColor[2];
     } else {
-      this.particleData[index + 3] = this.config.particleColor[0];
-      this.particleData[index + 4] = this.config.particleColor[1];
-      this.particleData[index + 5] = this.config.particleColor[2];
+      this.particleData[particleIndex + 3] = this.config.particleColor[0];
+      this.particleData[particleIndex + 4] = this.config.particleColor[1];
+      this.particleData[particleIndex + 5] = this.config.particleColor[2];
     }
     
     // Age and lifetime - set a lifetime from the config with small variance
     const baseLifetime = this.config.lifetime || 5;
-    this.particleData[index + 6] = 0; // Age starts at 0
-    this.particleData[index + 7] = baseLifetime + (Math.random() * 0.4 - 0.2) * baseLifetime; // Add up to ±20% variance
-    
-    this.activeParticles++;
-    return true;
+    this.particleData[particleIndex + 6] = 0; // Age starts at 0
+    this.particleData[particleIndex + 7] = baseLifetime + (Math.random() * 0.4 - 0.2) * baseLifetime; // Add up to ±20% variance
   }
 
   updateParticles(deltaTime) {
@@ -1270,16 +1269,17 @@ export class ParticleSystem {
     }
     
     // Store the position
-    this.particleData[index] = posX;
-    this.particleData[index + 1] = posY;
-    this.particleData[index + 2] = posZ;
+    const particleIndex = newIndex * 8;
+    this.particleData[particleIndex] = posX;
+    this.particleData[particleIndex + 1] = posY;
+    this.particleData[particleIndex + 2] = posZ;
     
     // Create a stable velocity direction that won't be recalculated during physics updates
     // We'll use a consistent approach to determine initial velocity direction
     
     // Initialize a random but consistent direction vector for this particle
     // This ensures smoother movement at all emission rates
-    const velIndex = this.activeParticles * 4;
+    const velIndex = newIndex * 4;
     
     // First try: Use position to create an outward direction from origin
     const length = Math.sqrt(posX * posX + posY * posY + posZ * posZ);
@@ -1307,19 +1307,19 @@ export class ParticleSystem {
     
     // Color
     if (this.config.colorTransitionEnabled) {
-      this.particleData[index + 3] = this.config.startColor[0];
-      this.particleData[index + 4] = this.config.startColor[1];
-      this.particleData[index + 5] = this.config.startColor[2];
+      this.particleData[particleIndex + 3] = this.config.startColor[0];
+      this.particleData[particleIndex + 4] = this.config.startColor[1];
+      this.particleData[particleIndex + 5] = this.config.startColor[2];
     } else {
-      this.particleData[index + 3] = this.config.particleColor[0];
-      this.particleData[index + 4] = this.config.particleColor[1];
-      this.particleData[index + 5] = this.config.particleColor[2];
+      this.particleData[particleIndex + 3] = this.config.particleColor[0];
+      this.particleData[particleIndex + 4] = this.config.particleColor[1];
+      this.particleData[particleIndex + 5] = this.config.particleColor[2];
     }
     
     // Age and lifetime - set a lifetime from the config with small variance
     const baseLifetime = this.config.lifetime || 5;
-    this.particleData[index + 6] = 0; // Age starts at 0
-    this.particleData[index + 7] = baseLifetime + (Math.random() * 0.4 - 0.2) * baseLifetime; // Add up to ±20% variance
+    this.particleData[particleIndex + 6] = 0; // Age starts at 0
+    this.particleData[particleIndex + 7] = baseLifetime + (Math.random() * 0.4 - 0.2) * baseLifetime; // Add up to ±20% variance
   }
 
   updateParticles(deltaTime) {
@@ -1716,16 +1716,17 @@ export class ParticleSystem {
     }
     
     // Store the position
-    this.particleData[index] = posX;
-    this.particleData[index + 1] = posY;
-    this.particleData[index + 2] = posZ;
+    const particleIndex = newIndex * 8;
+    this.particleData[particleIndex] = posX;
+    this.particleData[particleIndex + 1] = posY;
+    this.particleData[particleIndex + 2] = posZ;
     
     // Create a stable velocity direction that won't be recalculated during physics updates
     // We'll use a consistent approach to determine initial velocity direction
     
     // Initialize a random but consistent direction vector for this particle
     // This ensures smoother movement at all emission rates
-    const velIndex = this.activeParticles * 4;
+    const velIndex = newIndex * 4;
     
     // First try: Use position to create an outward direction from origin
     const length = Math.sqrt(posX * posX + posY * posY + posZ * posZ);
@@ -1753,19 +1754,19 @@ export class ParticleSystem {
     
     // Color
     if (this.config.colorTransitionEnabled) {
-      this.particleData[index + 3] = this.config.startColor[0];
-      this.particleData[index + 4] = this.config.startColor[1];
-      this.particleData[index + 5] = this.config.startColor[2];
+      this.particleData[particleIndex + 3] = this.config.startColor[0];
+      this.particleData[particleIndex + 4] = this.config.startColor[1];
+      this.particleData[particleIndex + 5] = this.config.startColor[2];
     } else {
-      this.particleData[index + 3] = this.config.particleColor[0];
-      this.particleData[index + 4] = this.config.particleColor[1];
-      this.particleData[index + 5] = this.config.particleColor[2];
+      this.particleData[particleIndex + 3] = this.config.particleColor[0];
+      this.particleData[particleIndex + 4] = this.config.particleColor[1];
+      this.particleData[particleIndex + 5] = this.config.particleColor[2];
     }
     
     // Age and lifetime - set a lifetime from the config with small variance
     const baseLifetime = this.config.lifetime || 5;
-    this.particleData[index + 6] = 0; // Age starts at 0
-    this.particleData[index + 7] = baseLifetime + (Math.random() * 0.4 - 0.2) * baseLifetime; // Add up to ±20% variance
+    this.particleData[particleIndex + 6] = 0; // Age starts at 0
+    this.particleData[particleIndex + 7] = baseLifetime + (Math.random() * 0.4 - 0.2) * baseLifetime; // Add up to ±20% variance
   }
 
   updateParticles(deltaTime) {
@@ -2162,16 +2163,17 @@ export class ParticleSystem {
     }
     
     // Store the position
-    this.particleData[index] = posX;
-    this.particleData[index + 1] = posY;
-    this.particleData[index + 2] = posZ;
+    const particleIndex = newIndex * 8;
+    this.particleData[particleIndex] = posX;
+    this.particleData[particleIndex + 1] = posY;
+    this.particleData[particleIndex + 2] = posZ;
     
     // Create a stable velocity direction that won't be recalculated during physics updates
     // We'll use a consistent approach to determine initial velocity direction
     
     // Initialize a random but consistent direction vector for this particle
     // This ensures smoother movement at all emission rates
-    const velIndex = this.activeParticles * 4;
+    const velIndex = newIndex * 4;
     
     // First try: Use position to create an outward direction from origin
     const length = Math.sqrt(posX * posX + posY * posY + posZ * posZ);
@@ -2199,19 +2201,19 @@ export class ParticleSystem {
     
     // Color
     if (this.config.colorTransitionEnabled) {
-      this.particleData[index + 3] = this.config.startColor[0];
-      this.particleData[index + 4] = this.config.startColor[1];
-      this.particleData[index + 5] = this.config.startColor[2];
+      this.particleData[particleIndex + 3] = this.config.startColor[0];
+      this.particleData[particleIndex + 4] = this.config.startColor[1];
+      this.particleData[particleIndex + 5] = this.config.startColor[2];
     } else {
-      this.particleData[index + 3] = this.config.particleColor[0];
-      this.particleData[index + 4] = this.config.particleColor[1];
-      this.particleData[index + 5] = this.config.particleColor[2];
+      this.particleData[particleIndex + 3] = this.config.particleColor[0];
+      this.particleData[particleIndex + 4] = this.config.particleColor[1];
+      this.particleData[particleIndex + 5] = this.config.particleColor[2];
     }
     
     // Age and lifetime - set a lifetime from the config with small variance
     const baseLifetime = this.config.lifetime || 5;
-    this.particleData[index + 6] = 0; // Age starts at 0
-    this.particleData[index + 7] = baseLifetime + (Math.random() * 0.4 - 0.2) * baseLifetime; // Add up to ±20% variance
+    this.particleData[particleIndex + 6] = 0; // Age starts at 0
+    this.particleData[particleIndex + 7] = baseLifetime + (Math.random() * 0.4 - 0.2) * baseLifetime; // Add up to ±20% variance
   }
 
   updateBuffers() {
