@@ -5,6 +5,7 @@ import { ParticleSystem, ParticleSystemManager } from "./modules/particleSystem.
 import { createBindGroupLayouts, createRenderPipelines, createBindGroups, createSampler } from "./modules/renderers.js";
 import { createLookAtMatrix, createProjectionMatrix, multiplyMatrices, hexToRgb } from "./modules/utils.js";
 import { ParticleUI, MultiSystemUI, setupCameraControls } from "./modules/ui.js";
+import "./modules/tabs.js"; // Import the tabs functionality
 
 async function main() {
   // Initialize WebGPU

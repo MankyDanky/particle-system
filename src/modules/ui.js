@@ -4,100 +4,22 @@
 
 import { hexToRgb } from './utils.js';
 
-// New MultiSystemUI class to handle the particle system list
+// Updated MultiSystemUI class to use existing HTML elements
 export class MultiSystemUI {
   constructor(manager, onSystemSelected) {
     this.manager = manager;
     this.onSystemSelected = onSystemSelected;
-    this.container = null;
-    this.systemsList = null;
-    this.initElements();
+    this.systemsList = document.getElementById('systems-list');
+    this.container = document.getElementById('particle-systems-list');
+    this.setupEventListeners();
+    this.updateSystemsList();
   }
 
-  initElements() {
-    // Create container for particle system list
-    this.container = document.createElement('div');
-    this.container.className = 'particle-systems-list';
-    this.container.style.position = 'absolute';
-    this.container.style.top = '10px';
-    this.container.style.right = '10px';
-    this.container.style.width = '200px';
-    this.container.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-    this.container.style.borderRadius = '5px';
-    this.container.style.padding = '10px';
-    this.container.style.color = 'white';
-    this.container.style.fontFamily = 'Arial, sans-serif';
-    this.container.style.zIndex = '1000';
-
-    // Add title
-    const title = document.createElement('h3');
-    title.textContent = 'Particle Systems';
-    title.style.margin = '0 0 10px 0';
-    title.style.borderBottom = '1px solid rgba(255, 255, 255, 0.3)';
-    title.style.paddingBottom = '5px';
-    this.container.appendChild(title);
-
-    // Create buttons container
-    const buttonsContainer = document.createElement('div');
-    buttonsContainer.style.display = 'flex';
-    buttonsContainer.style.justifyContent = 'space-between';
-    buttonsContainer.style.marginBottom = '10px';
-    
-    // Add new system button
-    const addButton = document.createElement('button');
-    addButton.textContent = 'Add System';
-    addButton.className = 'particle-systems-button';
-    addButton.style.backgroundColor = '#4CAF50';
-    addButton.style.border = 'none';
-    addButton.style.padding = '5px 10px';
-    addButton.style.borderRadius = '3px';
-    addButton.style.color = 'white';
-    addButton.style.cursor = 'pointer';
-    addButton.onclick = () => this.addNewSystem();
-    buttonsContainer.appendChild(addButton);
-    
-    // Add duplicate button
-    const duplicateButton = document.createElement('button');
-    duplicateButton.textContent = 'Duplicate';
-    duplicateButton.className = 'particle-systems-button';
-    duplicateButton.style.backgroundColor = '#2196F3';
-    duplicateButton.style.border = 'none';
-    duplicateButton.style.padding = '5px 10px';
-    duplicateButton.style.borderRadius = '3px';
-    duplicateButton.style.color = 'white';
-    duplicateButton.style.cursor = 'pointer';
-    duplicateButton.onclick = () => this.duplicateSystem();
-    buttonsContainer.appendChild(duplicateButton);
-    
-    // Add delete button
-    const deleteButton = document.createElement('button');
-    deleteButton.textContent = 'Delete';
-    deleteButton.className = 'particle-systems-button';
-    deleteButton.style.backgroundColor = '#f44336';
-    deleteButton.style.border = 'none';
-    deleteButton.style.padding = '5px 10px';
-    deleteButton.style.borderRadius = '3px';
-    deleteButton.style.color = 'white';
-    deleteButton.style.cursor = 'pointer';
-    deleteButton.onclick = () => this.deleteSystem();
-    buttonsContainer.appendChild(deleteButton);
-    
-    this.container.appendChild(buttonsContainer);
-
-    // Create systems list
-    this.systemsList = document.createElement('ul');
-    this.systemsList.style.listStyle = 'none';
-    this.systemsList.style.padding = '0';
-    this.systemsList.style.margin = '0';
-    this.systemsList.style.maxHeight = '300px';
-    this.systemsList.style.overflowY = 'auto';
-    this.container.appendChild(this.systemsList);
-
-    // Add to document
-    document.body.appendChild(this.container);
-    
-    // Initialize list
-    this.updateSystemsList();
+  setupEventListeners() {
+    // Add event listeners for the buttons
+    document.getElementById('add-system-button').addEventListener('click', () => this.addNewSystem());
+    document.getElementById('duplicate-system-button').addEventListener('click', () => this.duplicateSystem());
+    document.getElementById('delete-system-button').addEventListener('click', () => this.deleteSystem());
   }
 
   updateSystemsList() {
@@ -110,17 +32,8 @@ export class MultiSystemUI {
     // Create list items
     systems.forEach(system => {
       const item = document.createElement('li');
-      item.style.padding = '8px 10px';
-      item.style.margin = '4px 0';
-      item.style.borderRadius = '3px';
-      item.style.cursor = 'pointer';
-      item.style.transition = 'background-color 0.2s';
-      
       if (system.isActive) {
-        item.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
-        item.style.fontWeight = 'bold';
-      } else {
-        item.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        item.classList.add('active');
       }
       
       item.textContent = system.name;
@@ -129,19 +42,6 @@ export class MultiSystemUI {
         this.updateSystemsList();
         if (this.onSystemSelected) {
           this.onSystemSelected(system.index);
-        }
-      };
-      
-      // Hover effect
-      item.onmouseover = () => {
-        if (!system.isActive) {
-          item.style.backgroundColor = 'rgba(255, 255, 255, 0.15)';
-        }
-      };
-      
-      item.onmouseout = () => {
-        if (!system.isActive) {
-          item.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
         }
       };
       

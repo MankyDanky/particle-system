@@ -3,226 +3,193 @@
 <head>
   <meta charset="UTF-8">
   <title>WebGPU Particle System</title>
-  <style>
-    body { 
-      margin: 0; 
-      padding: 0;
-      overflow: hidden;
-      width: 100vw;
-      height: 100vh;
-    }
-    canvas { 
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
-    .controls {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: rgba(0,0,0,0.5);
-      color: white;
-      padding: 10px;
-      border-radius: 5px;
-      z-index: 10;
-      max-height: 90vh;
-      overflow-y: auto;
-    }
-    .slider-container {
-      margin: 10px 0;
-    }
-    .color-container {
-      margin: 10px 0;
-      display: flex;
-      align-items: center;
-    }
-    .color-container.hidden,
-    .hidden {
-      display: none;
-    }
-    label {
-      display: inline-block;
-      width: 150px;
-    }
-    .checkbox-container {
-      margin: 10px 0;
-      display: flex;
-      align-items: center;
-    }
-    .checkbox-container input {
-      margin-right: 10px;
-    }
-    .color-input {
-      width: 60px;
-      height: 30px;
-      margin-right: 10px;
-      border: none;
-      cursor: pointer;
-    }
-    .dropdown-container {
-      margin: 10px 0;
-      display: flex;
-      align-items: center;
-    }
-    .dropdown-container select {
-      min-width: 100px;
-      padding: 4px;
-      background-color: #222;
-      color: white;
-      border: 1px solid #444;
-      border-radius: 3px;
-    }
-    .shape-settings {
-      margin-left: 20px;
-    }
-  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
   <canvas id="webgpu-canvas"></canvas>
   
   <div class="controls">
-    <button id="respawn-button">Respawn Particles</button>
+    <h3>Particle Controls</h3>
     
-    <div class="checkbox-container">
-      <input type="checkbox" id="burst-checkbox">
-      <label for="burst-checkbox">Burst Mode (Instant Emission)</label>
+    <!-- Tabs Navigation -->
+    <div class="tabs-navigation">
+      <button class="tab-button active" data-tab="emission">Emission</button>
+      <button class="tab-button" data-tab="shape">Shape</button>
+      <button class="tab-button" data-tab="appearance">Appearance</button>
+      <button class="tab-button" data-tab="physics">Physics</button>
     </div>
     
-    <div id="continuous-emission-container">
+    <!-- Emission Tab Content -->
+    <div class="tab-content active" id="emission-tab">
+      <div class="checkbox-container">
+        <input type="checkbox" id="burst-checkbox">
+        <label for="burst-checkbox">Burst Mode (Instant Emission)</label>
+      </div>
+      
+      <div id="continuous-emission-container">
+        <div class="slider-container">
+          <label for="emission-duration-slider">Emission Duration:</label>
+          <input type="range" id="emission-duration-slider" min="1" max="30" value="10" step="1">
+          <span id="emission-duration-value">10 sec</span>
+        </div>
+        
+        <div class="slider-container">
+          <label for="emission-rate-slider">Emission Rate:</label>
+          <input type="range" id="emission-rate-slider" min="1" max="100" value="10" step="1">
+          <span id="emission-rate-value">10 particles/sec</span>
+        </div>
+      </div>
+      
+      <div id="burst-emission-container" class="hidden">
+        <div class="slider-container">
+          <label for="particle-count-slider">Particle Count:</label>
+          <input type="range" id="particle-count-slider" min="10" max="2000" value="100" step="10">
+          <span id="particle-count-value">100</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Shape Tab Content -->
+    <div class="tab-content" id="shape-tab">
+      <div class="dropdown-container">
+        <label for="emission-shape">Emission Shape:</label>
+        <select id="emission-shape">
+          <option value="cube">Cube</option>
+          <option value="sphere">Sphere</option>
+          <option value="square">Square (2D)</option>
+          <option value="circle">Circle (2D)</option>
+        </select>
+      </div>
+      
+      <div id="cube-settings" class="shape-settings">
+        <div class="slider-container">
+          <label for="cube-length-slider">Outer Length:</label>
+          <input type="range" id="cube-length-slider" min="0.5" max="5" value="2" step="0.1">
+          <span id="cube-length-value">2</span>
+        </div>
+        <div class="slider-container">
+          <label for="inner-length-slider">Inner Length:</label>
+          <input type="range" id="inner-length-slider" min="0" max="2" value="0" step="0.1">
+          <span id="inner-length-value">0</span>
+        </div>
+      </div>
+      
+      <div id="sphere-settings" class="shape-settings hidden">
+        <div class="slider-container">
+          <label for="inner-radius-slider">Inner Radius:</label>
+          <input type="range" id="inner-radius-slider" min="0" max="2" value="0" step="0.1">
+          <span id="inner-radius-value">0</span>
+        </div>
+        <div class="slider-container">
+          <label for="outer-radius-slider">Outer Radius:</label>
+          <input type="range" id="outer-radius-slider" min="0.5" max="5" value="2" step="0.1">
+          <span id="outer-radius-value">2</span>
+        </div>
+      </div>
+      
+      <div id="square-settings" class="shape-settings hidden">
+        <div class="slider-container">
+          <label for="square-size-slider">Outer Size:</label>
+          <input type="range" id="square-size-slider" min="0.5" max="5" value="2" step="0.1">
+          <span id="square-size-value">2</span>
+        </div>
+        <div class="slider-container">
+          <label for="square-inner-size-slider">Inner Size:</label>
+          <input type="range" id="square-inner-size-slider" min="0" max="2" value="0" step="0.1">
+          <span id="square-inner-size-value">0</span>
+        </div>
+      </div>
+      
+      <div id="circle-settings" class="shape-settings hidden">
+        <div class="slider-container">
+          <label for="circle-inner-radius-slider">Inner Radius:</label>
+          <input type="range" id="circle-inner-radius-slider" min="0" max="2" value="0" step="0.1">
+          <span id="circle-inner-radius-value">0</span>
+        </div>
+        <div class="slider-container">
+          <label for="circle-outer-radius-slider">Outer Radius:</label>
+          <input type="range" id="circle-outer-radius-slider" min="0.5" max="5" value="2" step="0.1">
+          <span id="circle-outer-radius-value">2</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Appearance Tab Content -->
+    <div class="tab-content" id="appearance-tab">
       <div class="slider-container">
-        <label for="emission-duration-slider">Emission Duration:</label>
-        <input type="range" id="emission-duration-slider" min="1" max="30" value="10" step="1">
-        <span id="emission-duration-value">10 sec</span>
+        <label for="size-slider">Particle Size:</label>
+        <input type="range" id="size-slider" min="0.1" max="2.0" value="0.5" step="0.1">
+        <span id="size-value">0.5</span>
+      </div>
+      
+      <div class="checkbox-container">
+        <input type="checkbox" id="fade-checkbox" checked>
+        <label for="fade-checkbox">Fade Out Over Lifetime</label>
+      </div>
+      
+      <div class="checkbox-container">
+        <input type="checkbox" id="color-transition-checkbox">
+        <label for="color-transition-checkbox">Color Over Lifetime</label>
+      </div>
+      
+      <div class="color-container" id="single-color-container">
+        <label for="particle-color">Particle Color:</label>
+        <input type="color" id="particle-color" class="color-input" value="#ff4500">
+      </div>
+      
+      <div class="color-container hidden" id="gradient-color-container">
+        <label for="start-color">Start Color:</label>
+        <input type="color" id="start-color" class="color-input" value="#ff4500">
+        
+        <label for="end-color" style="width: auto; margin-left: 10px;">End Color:</label>
+        <input type="color" id="end-color" class="color-input" value="#0066ff">
+      </div>
+      
+      <div class="checkbox-container">
+        <input type="checkbox" id="bloom-checkbox" checked>
+        <label for="bloom-checkbox">Enable Bloom Effect</label>
+      </div>
+      
+      <div class="slider-container" id="bloom-intensity-container">
+        <label for="bloom-intensity-slider">Bloom Intensity:</label>
+        <input type="range" id="bloom-intensity-slider" min="0.1" max="5.0" value="1.0" step="0.1">
+        <span id="bloom-intensity-value">1.0</span>
+      </div>
+    </div>
+    
+    <!-- Physics Tab Content -->
+    <div class="tab-content" id="physics-tab">
+      <div class="slider-container">
+        <label for="lifetime-slider">Particle Lifetime:</label>
+        <input type="range" id="lifetime-slider" min="1" max="20" value="5" step="0.5">
+        <span id="lifetime-value">5 sec</span>
       </div>
       
       <div class="slider-container">
-        <label for="emission-rate-slider">Emission Rate:</label>
-        <input type="range" id="emission-rate-slider" min="1" max="100" value="10" step="1">
-        <span id="emission-rate-value">10 particles/sec</span>
+        <label for="speed-slider">Particle Speed:</label>
+        <input type="range" id="speed-slider" min="0" max="5" value="1" step="0.1">
+        <span id="speed-value">1</span>
       </div>
     </div>
-    
-    <div id="burst-emission-container" class="hidden">
-      <div class="slider-container">
-        <label for="particle-count-slider">Particle Count:</label>
-        <input type="range" id="particle-count-slider" min="10" max="2000" value="100" step="10">
-        <span id="particle-count-value">100</span>
-      </div>
+  </div>
+  
+  <!-- Particle Systems List UI -->
+  <div id="particle-systems-list" class="particle-systems-list">
+    <h3>Particle Systems</h3>
+    <div class="particle-systems-buttons">
+      <button id="add-system-button" class="particle-systems-button add">Add</button>
+      <button id="duplicate-system-button" class="particle-systems-button duplicate">Duplicate</button>
+      <button id="delete-system-button" class="particle-systems-button delete">Delete</button>
     </div>
-    
-    <div class="dropdown-container">
-      <label for="emission-shape">Emission Shape:</label>
-      <select id="emission-shape">
-        <option value="cube">Cube</option>
-        <option value="sphere">Sphere</option>
-        <option value="square">Square (2D)</option>
-        <option value="circle">Circle (2D)</option>
-      </select>
-    </div>
-    
-    <div id="cube-settings" class="shape-settings">
-      <div class="slider-container">
-        <label for="cube-length-slider">Outer Length:</label>
-        <input type="range" id="cube-length-slider" min="0.5" max="5" value="2" step="0.1">
-        <span id="cube-length-value">2</span>
-      </div>
-      <div class="slider-container">
-        <label for="inner-length-slider">Inner Length:</label>
-        <input type="range" id="inner-length-slider" min="0" max="2" value="0" step="0.1">
-        <span id="inner-length-value">0</span>
-      </div>
-    </div>
-    
-    <div id="sphere-settings" class="shape-settings hidden">
-      <div class="slider-container">
-        <label for="inner-radius-slider">Inner Radius:</label>
-        <input type="range" id="inner-radius-slider" min="0" max="2" value="0" step="0.1">
-        <span id="inner-radius-value">0</span>
-      </div>
-      <div class="slider-container">
-        <label for="outer-radius-slider">Outer Radius:</label>
-        <input type="range" id="outer-radius-slider" min="0.5" max="5" value="2" step="0.1">
-        <span id="outer-radius-value">2</span>
-      </div>
-    </div>
-    
-    <div id="square-settings" class="shape-settings hidden">
-      <div class="slider-container">
-        <label for="square-size-slider">Outer Size:</label>
-        <input type="range" id="square-size-slider" min="0.5" max="5" value="2" step="0.1">
-        <span id="square-size-value">2</span>
-      </div>
-      <div class="slider-container">
-        <label for="square-inner-size-slider">Inner Size:</label>
-        <input type="range" id="square-inner-size-slider" min="0" max="2" value="0" step="0.1">
-        <span id="square-inner-size-value">0</span>
-      </div>
-    </div>
-    
-    <div id="circle-settings" class="shape-settings hidden">
-      <div class="slider-container">
-        <label for="circle-inner-radius-slider">Inner Radius:</label>
-        <input type="range" id="circle-inner-radius-slider" min="0" max="2" value="0" step="0.1">
-        <span id="circle-inner-radius-value">0</span>
-      </div>
-      <div class="slider-container">
-        <label for="circle-outer-radius-slider">Outer Radius:</label>
-        <input type="range" id="circle-outer-radius-slider" min="0.5" max="5" value="2" step="0.1">
-        <span id="circle-outer-radius-value">2</span>
-      </div>
-    </div>
-    
-    <div class="slider-container">
-      <label for="lifetime-slider">Particle Lifetime:</label>
-      <input type="range" id="lifetime-slider" min="1" max="20" value="5" step="0.5">
-      <span id="lifetime-value">5 sec</span>
-    </div>
-    
-    <div class="slider-container">
-      <label for="size-slider">Particle Size:</label>
-      <input type="range" id="size-slider" min="0.1" max="2.0" value="0.5" step="0.1">
-      <span id="size-value">0.5</span>
-    </div>
-    
-    <div class="slider-container">
-      <label for="speed-slider">Particle Speed:</label>
-      <input type="range" id="speed-slider" min="0" max="5" value="1" step="0.1">
-      <span id="speed-value">1</span>
-    </div>
-    
-    <div class="checkbox-container">
-      <input type="checkbox" id="fade-checkbox" checked>
-      <label for="fade-checkbox">Fade Out Over Lifetime</label>
-    </div>
-    
-    <div class="checkbox-container">
-      <input type="checkbox" id="color-transition-checkbox">
-      <label for="color-transition-checkbox">Color Over Lifetime</label>
-    </div>
-    
-    <div class="color-container" id="single-color-container">
-      <label for="particle-color">Particle Color:</label>
-      <input type="color" id="particle-color" class="color-input" value="#ff4500">
-    </div>
-    
-    <div class="color-container hidden" id="gradient-color-container">
-      <label for="start-color">Start Color:</label>
-      <input type="color" id="start-color" class="color-input" value="#ff4500">
-      
-      <label for="end-color" style="width: auto; margin-left: 10px;">End Color:</label>
-      <input type="color" id="end-color" class="color-input" value="#0066ff">
-    </div>
-    
-    <div class="checkbox-container">
-      <input type="checkbox" id="bloom-checkbox" checked>
-      <label for="bloom-checkbox">Enable Bloom Effect</label>
-    </div>
-    
-    <div class="slider-container" id="bloom-intensity-container">
-      <label for="bloom-intensity-slider">Bloom Intensity:</label>
-      <input type="range" id="bloom-intensity-slider" min="0.1" max="5.0" value="1.0" step="0.1">
-      <span id="bloom-intensity-value">1.0</span>
-    </div>
+    <ul id="systems-list"></ul>
+  </div>
+  
+  <!-- Play button at the bottom center -->
+  <div class="play-button-container">
+    <button id="respawn-button" class="play-button">Play</button>
   </div>
   
   <script type="module" src="/src/main.js"></script>
