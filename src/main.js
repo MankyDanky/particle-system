@@ -62,6 +62,31 @@ async function main() {
     }
   };
   
+  // Bind group cache to avoid recreating bind groups every frame
+  const bindGroupCache = {
+    // System-specific bind groups for particles
+    systemBindGroups: [],
+    // Bloom-related bind groups
+    systemBloomHorizontalBindGroups: [],
+    secondHorizontalBindGroups: [],
+    systemBloomCompositeBindGroups: [],
+    // Final rendering bind groups
+    nonBloomBindGroup: null,
+    bloomCompositeBindGroups: [],
+    finalBindGroup: null,
+    
+    // Clear cache when textures change
+    clear: function() {
+      this.systemBindGroups = [];
+      this.systemBloomHorizontalBindGroups = [];
+      this.secondHorizontalBindGroups = [];
+      this.systemBloomCompositeBindGroups = [];
+      this.nonBloomBindGroup = null;
+      this.bloomCompositeBindGroups = [];
+      this.finalBindGroup = null;
+    }
+  };
+  
   // Initialize configuration state for the first particle system
   const config = {
     // Camera control settings
@@ -381,16 +406,18 @@ async function main() {
         continue;
       }
       
-      // Create a system-specific bind group
-      const systemBindGroup = device.createBindGroup({
-        layout: layouts.particleBindGroupLayout,
-        entries: [
-          { binding: 0, resource: { buffer: uniformBuffer } },
-          { binding: 1, resource: { buffer: system.appearanceUniformBuffer } }
-        ]
-      });
+      // Get or create the system-specific bind group
+      if (!bindGroupCache.systemBindGroups[system.config.id]) {
+        bindGroupCache.systemBindGroups[system.config.id] = device.createBindGroup({
+          layout: layouts.particleBindGroupLayout,
+          entries: [
+            { binding: 0, resource: { buffer: uniformBuffer } },
+            { binding: 1, resource: { buffer: system.appearanceUniformBuffer } }
+          ]
+        });
+      }
       
-      nonBloomPassEncoder.setBindGroup(0, systemBindGroup);
+      nonBloomPassEncoder.setBindGroup(0, bindGroupCache.systemBindGroups[system.config.id]);
       nonBloomPassEncoder.setVertexBuffer(1, system.instanceBuffer);
       nonBloomPassEncoder.drawIndexed(6, system.activeParticles);
     }
@@ -464,19 +491,21 @@ async function main() {
           }],
         };
         
-        // Create a bloom bind group for this specific system's texture
-        const systemBloomHorizontalBindGroup = device.createBindGroup({
-          layout: layouts.bloomBindGroupLayout,
-          entries: [
-            { binding: 0, resource: sampler },
-            { binding: 1, resource: bloomSourceTexture.createView() },
-            { binding: 2, resource: { buffer: horizontalBlurUniformBuffer } }
-          ]
-        });
+        // Create or get cached bloom bind group for this specific system's texture
+        if (!bindGroupCache.systemBloomHorizontalBindGroups[i]) {
+          bindGroupCache.systemBloomHorizontalBindGroups[i] = device.createBindGroup({
+            layout: layouts.bloomBindGroupLayout,
+            entries: [
+              { binding: 0, resource: sampler },
+              { binding: 1, resource: bloomSourceTexture.createView() },
+              { binding: 2, resource: { buffer: horizontalBlurUniformBuffer } }
+            ]
+          });
+        }
         
         const horizontalBlurPassEncoder = commandEncoder.beginRenderPass(horizontalBlurPassDescriptor);
         horizontalBlurPassEncoder.setPipeline(blurPipeline);
-        horizontalBlurPassEncoder.setBindGroup(0, systemBloomHorizontalBindGroup);
+        horizontalBlurPassEncoder.setBindGroup(0, bindGroupCache.systemBloomHorizontalBindGroups[i]);
         horizontalBlurPassEncoder.draw(3);
         horizontalBlurPassEncoder.end();
         
@@ -497,18 +526,20 @@ async function main() {
         verticalBlurPassEncoder.end();
         
         // Apply a second pass for smoother bloom
-        const secondHorizontalBindGroup = device.createBindGroup({
-          layout: layouts.bloomBindGroupLayout,
-          entries: [
-            { binding: 0, resource: sampler },
-            { binding: 1, resource: bloomTexB.createView() },
-            { binding: 2, resource: { buffer: horizontalBlurUniformBuffer } }
-          ]
-        });
+        if (!bindGroupCache.secondHorizontalBindGroups[i]) {
+          bindGroupCache.secondHorizontalBindGroups[i] = device.createBindGroup({
+            layout: layouts.bloomBindGroupLayout,
+            entries: [
+              { binding: 0, resource: sampler },
+              { binding: 1, resource: bloomTexB.createView() },
+              { binding: 2, resource: { buffer: horizontalBlurUniformBuffer } }
+            ]
+          });
+        }
         
         const secondHorizontalBlurPassEncoder = commandEncoder.beginRenderPass(horizontalBlurPassDescriptor);
         secondHorizontalBlurPassEncoder.setPipeline(blurPipeline);
-        secondHorizontalBlurPassEncoder.setBindGroup(0, secondHorizontalBindGroup);
+        secondHorizontalBlurPassEncoder.setBindGroup(0, bindGroupCache.secondHorizontalBindGroups[i]);
         secondHorizontalBlurPassEncoder.draw(3);
         secondHorizontalBlurPassEncoder.end();
         
@@ -619,17 +650,20 @@ async function main() {
     const finalPassEncoder = commandEncoder.beginRenderPass(finalPassDescriptor);
     finalPassEncoder.setPipeline(directRenderPipeline);
     
-    const finalBindGroup = device.createBindGroup({
-      layout: layouts.compositeBindGroupLayout,
-      entries: [
-        { binding: 0, resource: sampler },
-        { binding: 1, resource: combinedTexture.createView() },
-        { binding: 2, resource: sceneTexture.createView() }, // Unused
-        { binding: 3, resource: { buffer: bloomIntensityBuffer } }
-      ]
-    });
+    // Use cached final bind group or create a new one
+    if (!bindGroupCache.finalBindGroup) {
+      bindGroupCache.finalBindGroup = device.createBindGroup({
+        layout: layouts.compositeBindGroupLayout,
+        entries: [
+          { binding: 0, resource: sampler },
+          { binding: 1, resource: combinedTexture.createView() },
+          { binding: 2, resource: sceneTexture.createView() }, // Unused
+          { binding: 3, resource: { buffer: bloomIntensityBuffer } }
+        ]
+      });
+    }
     
-    finalPassEncoder.setBindGroup(0, finalBindGroup);
+    finalPassEncoder.setBindGroup(0, bindGroupCache.finalBindGroup);
     finalPassEncoder.draw(3);
     finalPassEncoder.end();
     
@@ -664,6 +698,9 @@ async function main() {
     device.queue.writeBuffer(horizontalBlurUniformBuffer, 0, horizontalDirection);
     device.queue.writeBuffer(verticalBlurUniformBuffer, 0, verticalDirection);
     
+    // Clear the bind group cache since it references old textures
+    bindGroupCache.clear();
+    
     // Recreate bind groups with the new textures
     const textures = {
       sceneTexture,
@@ -676,13 +713,24 @@ async function main() {
     // Resize cached textures to match new window size
     textureCache.resizeTextures(canvas.width, canvas.height);
     
-    // Schedule the old textures for destruction after the current frame completes
-    requestAnimationFrame(() => {
+    // Make sure we don't render with cached bind groups that reference destroyed textures
+    // Wait for the next frame to ensure no in-flight operations are using the old textures
+    let frameSkipped = false;
+    const waitForNextFrame = () => {
+      if (!frameSkipped) {
+        frameSkipped = true;
+        requestAnimationFrame(waitForNextFrame);
+        return;
+      }
+      
+      // Now it's safe to destroy the old textures
       oldSceneTexture.destroy();
       oldBloomTexA.destroy();
       oldBloomTexB.destroy();
       oldDepthTexture.destroy();
-    });
+    };
+    
+    requestAnimationFrame(waitForNextFrame);
   }
   
   // Function to update quad geometry with new size

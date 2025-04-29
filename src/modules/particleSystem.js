@@ -537,7 +537,7 @@ export class ParticleSystem {
     }
     
     // Readback less frequently but still regularly to clean up particles
-    if (this.frameCount++ % 60 === 0) {
+    if (this.frameCount++ % 300 === 0) {
       this.readbackAndProcessParticles();
     }
   }
