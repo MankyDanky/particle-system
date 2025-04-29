@@ -299,44 +299,44 @@ export const particlePhysicsShader = `
     // Update age
     particleBuffer[baseIndex + 6u] = age + physics.deltaTime;
     
-    // Get velocity data
+    // Get current velocity data
     let velocityIndex = index;
-    let velX = velocities[velocityIndex].velocity.x;
-    let velY = velocities[velocityIndex].velocity.y;
-    let velZ = velocities[velocityIndex].velocity.z;
+    let currentVelocity = velocities[velocityIndex].velocity;
     
-    // Calculate direction from origin
-    var length = sqrt(posX * posX + posY * posY + posZ * posZ);
-    var dirX = 0.0;
-    var dirY = 1.0; // Default up direction
-    var dirZ = 0.0;
+    // Use the original velocity direction but apply the current speed setting
+    // This ensures consistent movement regardless of emission rate or frame rate
+    var normalizedVelocity: vec3<f32>;
+    let velLength = length(currentVelocity);
     
-    // If not at origin, calculate normalized direction
-    if (length > 0.001) {
-      dirX = posX / length;
-      dirY = posY / length;
-      dirZ = posZ / length;
+    if (velLength > 0.001) {
+      normalizedVelocity = currentVelocity / velLength;
     } else {
-      // If at origin and has existing velocity, use that direction
-      let velLength = sqrt(velX * velX + velY * velY + velZ * velZ);
-      if (velLength > 0.001) {
-        dirX = velX / velLength;
-        dirY = velY / velLength;
-        dirZ = velZ / velLength;
+      // If velocity is nearly zero, use position as fallback for direction
+      let posLength = length(vec3<f32>(posX, posY, posZ));
+      if (posLength > 0.001) {
+        normalizedVelocity = vec3<f32>(posX, posY, posZ) / posLength;
+      } else {
+        // Default upward direction if no other reference
+        normalizedVelocity = vec3<f32>(0.0, 1.0, 0.0);
       }
     }
     
-    // Apply speed to direction
-    let newVelX = dirX * physics.particleSpeed;
-    let newVelY = dirY * physics.particleSpeed;
-    let newVelZ = dirZ * physics.particleSpeed;
+    // Apply speed setting - this is now uniform regardless of emission rate
+    // Using a fixed base movement distance per second ensures consistency
+    let moveSpeed = physics.particleSpeed * 2.0; // Base speed multiplier
+    let scaledVelocity = normalizedVelocity * moveSpeed;
     
-    // Update velocity in buffer
-    velocities[velocityIndex].velocity = vec3<f32>(newVelX, newVelY, newVelZ);
+    // Update velocity in buffer - store the scaled velocity for consistency
+    velocities[velocityIndex].velocity = scaledVelocity;
     
-    // Update position based on new velocity
-    particleBuffer[baseIndex] = posX + newVelX * physics.deltaTime;
-    particleBuffer[baseIndex + 1u] = posY + newVelY * physics.deltaTime;
-    particleBuffer[baseIndex + 2u] = posZ + newVelZ * physics.deltaTime;
+    // Apply movement with time scaling - this ensures smooth motion at all frame rates
+    // The fixed delta scaling ensures consistent movement regardless of actual time steps
+    let timeScale = min(physics.deltaTime, 0.033); // Cap max time step to prevent large jumps
+    let moveDistance = scaledVelocity * timeScale;
+    
+    // Update position with the calculated movement
+    particleBuffer[baseIndex] = posX + moveDistance.x;
+    particleBuffer[baseIndex + 1u] = posY + moveDistance.y;
+    particleBuffer[baseIndex + 2u] = posZ + moveDistance.z;
   }
 `;
