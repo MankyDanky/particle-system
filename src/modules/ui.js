@@ -76,7 +76,9 @@ export class MultiSystemUI {
       endColor: [0, 0, 1], // Blue
       bloomEnabled: true,
       bloomIntensity: 1.0,
-      burstMode: false
+      burstMode: false,
+      gravityEnabled: false,
+      gravityStrength: 2
     });
     
     // Set as active
@@ -188,6 +190,12 @@ export class ParticleUI {
     this.bloomIntensityContainer = document.getElementById('bloom-intensity-container');
     this.respawnButton = document.getElementById('respawn-button');
     
+    // Gravity settings
+    this.gravityCheckbox = document.getElementById('gravity-checkbox');
+    this.gravityStrengthSlider = document.getElementById('gravity-strength-slider');
+    this.gravityStrengthValue = document.getElementById('gravity-strength-value');
+    this.gravityStrengthContainer = document.getElementById('gravity-strength-container');
+    
     // Shape UI elements
     this.emissionShapeSelect = document.getElementById('emission-shape');
     this.cubeSettings = document.getElementById('cube-settings');
@@ -239,6 +247,37 @@ export class ParticleUI {
       const value = this.emissionRateSlider.value;
       this.emissionRateValue.textContent = `${value} particles/sec`;
       this.config.emissionRate = parseFloat(value);
+    });
+    
+    // Gravity checkbox
+    this.gravityCheckbox.addEventListener('change', this.onGravityChange = () => {
+      this.config.gravityEnabled = this.gravityCheckbox.checked;
+      
+      // Show/hide gravity strength slider based on gravity enabled state
+      if (this.config.gravityEnabled) {
+        this.gravityStrengthContainer.classList.remove('hidden');
+        // Set gravity to the slider value
+        const gravityValue = parseFloat(this.gravityStrengthSlider.value);
+        if (this.config.onPhysicsChange) {
+          this.config.onPhysicsChange('gravity', gravityValue);
+        }
+      } else {
+        this.gravityStrengthContainer.classList.add('hidden');
+        // Set gravity to zero when disabled
+        if (this.config.onPhysicsChange) {
+          this.config.onPhysicsChange('gravity', 0);
+        }
+      }
+    });
+    
+    // Gravity strength slider
+    this.gravityStrengthSlider.addEventListener('input', this.onGravityStrengthChange = () => {
+      const value = this.gravityStrengthSlider.value;
+      this.gravityStrengthValue.textContent = value;
+      
+      if (this.config.gravityEnabled && this.config.onPhysicsChange) {
+        this.config.onPhysicsChange('gravity', parseFloat(value));
+      }
     });
     
     // Fade checkbox
@@ -604,6 +643,12 @@ export class ParticleUI {
     if (this.onCircleOuterRadiusChange) {
       this.circleOuterRadiusSlider.removeEventListener('input', this.onCircleOuterRadiusChange);
     }
+    if (this.onGravityChange) {
+      this.gravityCheckbox.removeEventListener('change', this.onGravityChange);
+    }
+    if (this.onGravityStrengthChange) {
+      this.gravityStrengthSlider.removeEventListener('input', this.onGravityStrengthChange);
+    }
   }
 
   updateUIState() {
@@ -625,6 +670,17 @@ export class ParticleUI {
     
     this.speedSlider.value = this.config.particleSpeed || 1.0;
     this.speedValue.textContent = this.config.particleSpeed || 1.0;
+    
+    // Initialize gravity settings
+    this.gravityCheckbox.checked = this.config.gravityEnabled || false;
+    this.gravityStrengthSlider.value = this.config.gravityStrength || 2;
+    this.gravityStrengthValue.textContent = this.config.gravityStrength || 2;
+    
+    if (this.config.gravityEnabled) {
+      this.gravityStrengthContainer.classList.remove('hidden');
+    } else {
+      this.gravityStrengthContainer.classList.add('hidden');
+    }
     
     this.fadeCheckbox.checked = this.config.fadeEnabled;
     this.colorTransitionCheckbox.checked = this.config.colorTransitionEnabled;

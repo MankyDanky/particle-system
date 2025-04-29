@@ -222,6 +222,18 @@ async function main() {
       }
     };
     
+    selectedConfig.onPhysicsChange = (param, value) => {
+      // Update physics settings for this system
+      const system = particleSystemManager.particleSystems[index].system;
+      
+      if (param === 'gravity') {
+        system.setGravity(value);
+        selectedConfig.gravityStrength = value;
+      } else if (param === 'turbulence') {
+        system.setTurbulence(value);
+      }
+    };
+    
     selectedConfig.onBloomIntensityChange = () => {
       // Update this specific system's bloom intensity buffer
       const system = particleSystemManager.particleSystems[index].system;
