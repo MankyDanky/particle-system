@@ -240,3 +240,103 @@ export const directRenderShader = `
     return textureSample(originalTexture, texSampler, input.texCoord);
   }
 `;
+
+export const particlePhysicsShader = `
+  struct PhysicsUniforms {
+    deltaTime: f32,
+    particleSpeed: f32,
+    gravity: f32,
+    turbulence: f32,
+    attractorStrength: f32,
+    padding: f32, // Adding padding to ensure 16-byte alignment
+    attractorPosition: vec3<f32>,
+    padding2: f32, // Adding padding to ensure 16-byte alignment
+  }
+
+  // Updated struct to match actual memory layout [x, y, z, r, g, b, age, lifetime]
+  struct ParticleData {
+    position: vec3<f32>,
+    color: vec3<f32>,
+    age: f32,
+    lifetime: f32,
+  }
+
+  struct ParticleVelocity {
+    velocity: vec3<f32>,
+    padding: f32,
+  }
+
+  @binding(0) @group(0) var<uniform> physics: PhysicsUniforms;
+  @binding(1) @group(0) var<storage, read_write> particleBuffer: array<f32>;
+  @binding(2) @group(0) var<storage, read_write> velocities: array<ParticleVelocity>;
+
+  @compute @workgroup_size(64)
+  fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let index = global_id.x;
+    let particleStride = 8u; // 8 floats per particle
+    
+    // Calculate base index in the float array
+    let baseIndex = index * particleStride;
+    
+    // Skip if out of bounds (check if we have at least 8 more floats)
+    if (baseIndex + 7u >= arrayLength(&particleBuffer)) {
+      return;
+    }
+    
+    // Read particle data from flat array
+    let posX = particleBuffer[baseIndex];
+    let posY = particleBuffer[baseIndex + 1u];
+    let posZ = particleBuffer[baseIndex + 2u];
+    // color values at baseIndex + 3,4,5
+    let age = particleBuffer[baseIndex + 6u];
+    let lifetime = particleBuffer[baseIndex + 7u];
+    
+    // Skip dead particles
+    if (age >= lifetime) {
+      return;
+    }
+    
+    // Update age
+    particleBuffer[baseIndex + 6u] = age + physics.deltaTime;
+    
+    // Get velocity data
+    let velocityIndex = index;
+    let velX = velocities[velocityIndex].velocity.x;
+    let velY = velocities[velocityIndex].velocity.y;
+    let velZ = velocities[velocityIndex].velocity.z;
+    
+    // Calculate direction from origin
+    var length = sqrt(posX * posX + posY * posY + posZ * posZ);
+    var dirX = 0.0;
+    var dirY = 1.0; // Default up direction
+    var dirZ = 0.0;
+    
+    // If not at origin, calculate normalized direction
+    if (length > 0.001) {
+      dirX = posX / length;
+      dirY = posY / length;
+      dirZ = posZ / length;
+    } else {
+      // If at origin and has existing velocity, use that direction
+      let velLength = sqrt(velX * velX + velY * velY + velZ * velZ);
+      if (velLength > 0.001) {
+        dirX = velX / velLength;
+        dirY = velY / velLength;
+        dirZ = velZ / velLength;
+      }
+    }
+    
+    // Apply speed to direction
+    let newVelX = dirX * physics.particleSpeed;
+    let newVelY = dirY * physics.particleSpeed;
+    let newVelZ = dirZ * physics.particleSpeed;
+    
+    // Update velocity in buffer
+    velocities[velocityIndex].velocity = vec3<f32>(newVelX, newVelY, newVelZ);
+    
+    // Update position based on new velocity
+    particleBuffer[baseIndex] = posX + newVelX * physics.deltaTime;
+    particleBuffer[baseIndex + 1u] = posY + newVelY * physics.deltaTime;
+    particleBuffer[baseIndex + 2u] = posZ + newVelZ * physics.deltaTime;
+  }
+`;

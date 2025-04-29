@@ -17,12 +17,110 @@ export class ParticleSystem {
     
     // Create typed arrays for particle data and velocities
     this.particleData = new Float32Array(this.MAX_PARTICLES * 8); // [x, y, z, r, g, b, age, lifetime]
-    this.particleVelocities = new Float32Array(this.MAX_PARTICLES * 3); // [vx, vy, vz]
+    this.particleVelocities = new Float32Array(this.MAX_PARTICLES * 4); // [vx, vy, vz, padding]
     
-    // Create GPU buffers
+    // Create GPU buffers for rendering
     this.instanceBuffer = device.createBuffer({
       size: this.MAX_PARTICLES * 8 * 4,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+      label: "particleInstanceBuffer"
+    });
+    
+    // Create GPU buffers for compute shader
+    this.velocityBuffer = device.createBuffer({
+      size: this.MAX_PARTICLES * 4 * 4, // vec3 + padding
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      label: "particleVelocityBuffer"
+    });
+    
+    // Create physics uniform buffer - now with additional physics parameters
+    // Increasing the size to 48 bytes (12 floats) to match shader expectations
+    this.physicsUniformBuffer = device.createBuffer({
+      size: 48, // 12 float32 values (48 bytes)
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      label: "physicsUniformBuffer"
+    });
+    
+    // Set default physics values
+    this.physicsSettings = {
+      gravity: 0.0,        // Turning off gravity for basic velocity
+      turbulence: 0.0,     // Turning off turbulence for basic velocity
+      attractorStrength: 0, // No attractor for basic velocity
+      attractorPosition: [0, 0, 0]  // Default attractor position
+    };
+    
+    // Initialize the frame counter for readback scheduling
+    this.frameCount = 0;
+    this.shouldReset = false;
+    this.computeReady = false;
+    
+    // Create compute pipeline and bind group layout
+    this.initComputePipeline(device);
+  }
+  
+  async initComputePipeline(device) {
+    try {
+      await this.createComputePipeline(device);
+      this.computeReady = true;
+    } catch (error) {
+      console.error("Error initializing compute pipeline:", error);
+    }
+  }
+  
+  async createComputePipeline(device) {
+    const { particlePhysicsShader } = await import('./shaders.js');
+    
+    // Create bind group layout for compute shader
+    this.computeBindGroupLayout = device.createBindGroupLayout({
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'uniform' }
+        },
+        {
+          binding: 1,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' }
+        },
+        {
+          binding: 2,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' }
+        }
+      ]
+    });
+    
+    // Create compute pipeline
+    this.computePipeline = device.createComputePipeline({
+      layout: device.createPipelineLayout({
+        bindGroupLayouts: [this.computeBindGroupLayout]
+      }),
+      compute: {
+        module: device.createShaderModule({
+          code: particlePhysicsShader
+        }),
+        entryPoint: 'main'
+      }
+    });
+    
+    // Create compute bind group
+    this.computeBindGroup = device.createBindGroup({
+      layout: this.computeBindGroupLayout,
+      entries: [
+        {
+          binding: 0,
+          resource: { buffer: this.physicsUniformBuffer }
+        },
+        {
+          binding: 1,
+          resource: { buffer: this.instanceBuffer }
+        },
+        {
+          binding: 2,
+          resource: { buffer: this.velocityBuffer }
+        }
+      ]
     });
   }
 
@@ -38,9 +136,40 @@ export class ParticleSystem {
       // Update the particle count to match the requested burst count
       this.particleCount = burstCount;
       
-      // Emit all particles immediately
+      // Track the number of particles emitted in each batch
+      let particlesBatch = 0;
+      const batchSize = 500; // Process in smaller batches
+      
+      // Emit all particles immediately, but in batches
       for (let i = 0; i < burstCount; i++) {
         this.emitParticle();
+        particlesBatch++;
+        
+        // Write to GPU in batches to avoid large buffer uploads at once
+        if (particlesBatch >= batchSize || i === burstCount - 1) {
+          const startIdx = i - particlesBatch + 1;
+          const dataOffset = startIdx * 8;
+          const velOffset = startIdx * 4;
+          
+          // Upload this batch to the GPU
+          this.device.queue.writeBuffer(
+            this.instanceBuffer, 
+            dataOffset * 4, // Offset in bytes
+            this.particleData, 
+            dataOffset, 
+            particlesBatch * 8
+          );
+          
+          this.device.queue.writeBuffer(
+            this.velocityBuffer, 
+            velOffset * 4, // Offset in bytes
+            this.particleVelocities, 
+            velOffset, 
+            particlesBatch * 4
+          );
+          
+          particlesBatch = 0;
+        }
       }
       
       // No need to continue emitting
@@ -106,10 +235,11 @@ export class ParticleSystem {
     this.particleData[index + 2] = posZ;
     
     // Store velocity vector for this particle (scaled by speed)
-    const velIndex = this.activeParticles * 3;
+    const velIndex = this.activeParticles * 4;
     this.particleVelocities[velIndex] = dirX * this.config.particleSpeed;
     this.particleVelocities[velIndex + 1] = dirY * this.config.particleSpeed;
     this.particleVelocities[velIndex + 2] = dirZ * this.config.particleSpeed;
+    this.particleVelocities[velIndex + 3] = 0; // padding
     
     // Color
     if (this.config.colorTransitionEnabled) {
@@ -149,9 +279,39 @@ export class ParticleSystem {
           wholeParticlesToEmit += 1;
         }
         
+        // Remember the current active count before emitting new particles
+        const prevActiveCount = this.activeParticles;
+        
         // Emit particles
+        let particlesEmitted = false;
         for (let i = 0; i < wholeParticlesToEmit; i++) {
-          this.emitParticle();
+          if (this.emitParticle()) {
+            particlesEmitted = true;
+          }
+        }
+        
+        // Update GPU buffers if new particles were emitted - only for the newly emitted particles
+        if (particlesEmitted) {
+          // Only write the newly emitted particles, not the entire buffer
+          const newParticleCount = this.activeParticles - prevActiveCount;
+          const particleDataOffset = prevActiveCount * 8;
+          const velocityOffset = prevActiveCount * 4;
+          
+          this.device.queue.writeBuffer(
+            this.instanceBuffer, 
+            particleDataOffset * 4, // Offset in bytes (float32 = 4 bytes)
+            this.particleData, 
+            particleDataOffset, 
+            newParticleCount * 8
+          );
+          
+          this.device.queue.writeBuffer(
+            this.velocityBuffer, 
+            velocityOffset * 4, // Offset in bytes (float32 = 4 bytes)
+            this.particleVelocities, 
+            velocityOffset, 
+            newParticleCount * 4
+          );
         }
       } else if (this.emitting) {
         // Stop emitting once duration is reached
@@ -159,52 +319,147 @@ export class ParticleSystem {
       }
     }
     
-    // Update particle positions and ages
-    let needsUpdate = false;
-    for (let i = 0; i < this.activeParticles; i++) {
-      // Update age
-      this.particleData[i * 8 + 6] += deltaTime;
+    // Update physics uniforms for compute shader - ensure all 12 values are provided
+    const physicsData = new Float32Array([
+      deltaTime,                      // deltaTime
+      this.config.particleSpeed,      // particleSpeed
+      this.physicsSettings.gravity,   // gravity
+      this.physicsSettings.turbulence, // turbulence
+      this.physicsSettings.attractorStrength, // attractorStrength
+      0.0,                            // padding
+      this.physicsSettings.attractorPosition[0], // attractorPosition.x
+      this.physicsSettings.attractorPosition[1], // attractorPosition.y
+      this.physicsSettings.attractorPosition[2], // attractorPosition.z
+      0.0,                            // padding2
+      0.0,                            // Extra padding to match 48 bytes (12 floats)
+      0.0                             // Extra padding to match 48 bytes (12 floats)
+    ]);
+    this.device.queue.writeBuffer(this.physicsUniformBuffer, 0, physicsData);
+    
+    // Run compute shader to update particles on the GPU if ready
+    if (this.activeParticles > 0 && this.computeReady) {
+      const commandEncoder = this.device.createCommandEncoder({label: "ParticlePhysicsEncoder"});
+      const computePass = commandEncoder.beginComputePass({label: "ParticlePhysicsPass"});
       
-      // Update position based on velocity and deltaTime
-      const velIndex = i * 3;
-      const posIndex = i * 8;
+      computePass.setPipeline(this.computePipeline);
+      computePass.setBindGroup(0, this.computeBindGroup);
       
-      // Apply velocity to position
-      this.particleData[posIndex] += this.particleVelocities[velIndex] * deltaTime;
-      this.particleData[posIndex + 1] += this.particleVelocities[velIndex + 1] * deltaTime;
-      this.particleData[posIndex + 2] += this.particleVelocities[velIndex + 2] * deltaTime;
+      // Dispatch enough workgroups to cover all particles (64 threads per workgroup)
+      const workgroupCount = Math.max(1, Math.ceil(this.activeParticles / 64));
+      computePass.dispatchWorkgroups(workgroupCount, 1, 1);
       
-      needsUpdate = true;
+      computePass.end();
+      this.device.queue.submit([commandEncoder.finish()]);
+    } 
+    // Fallback to CPU updates if compute shader isn't ready yet
+    else if (this.activeParticles > 0 && !this.computeReady) {
+      // CPU fallback for updating particle positions
+      for (let i = 0; i < this.activeParticles; i++) {
+        // Update age
+        this.particleData[i * 8 + 6] += deltaTime;
+        
+        // Update position based on velocity and deltaTime
+        const velIndex = i * 4;
+        const posIndex = i * 8;
+        
+        // Apply velocity to position
+        this.particleData[posIndex] += this.particleVelocities[velIndex] * deltaTime;
+        this.particleData[posIndex + 1] += this.particleVelocities[velIndex + 1] * deltaTime;
+        this.particleData[posIndex + 2] += this.particleVelocities[velIndex + 2] * deltaTime;
+      }
+      
+      // Update the buffer
+      this.device.queue.writeBuffer(this.instanceBuffer, 0, this.particleData, 0, this.activeParticles * 8);
     }
     
-    if (needsUpdate) {
-      this.updateBuffers();
+    // Skip frequent readbacks as they might be causing issues
+    if (this.frameCount++ % 300 === 0) {
+      this.readbackAndProcessParticles();
     }
   }
-
-  updateBuffers() {
-    let newActiveCount = 0;
-    for (let i = 0; i < this.activeParticles; i++) {
-      const age = this.particleData[i * 8 + 6];
-      const lifetime = this.particleData[i * 8 + 7];
-      
-      if (age >= lifetime) continue;
-      
-      if (newActiveCount !== i) {
-        // Copy particle data
-        for (let j = 0; j < 8; j++) {
-          this.particleData[newActiveCount * 8 + j] = this.particleData[i * 8 + j];
-        }
-        
-        // Also copy the velocity data to keep arrays in sync
-        for (let j = 0; j < 3; j++) {
-          this.particleVelocities[newActiveCount * 3 + j] = this.particleVelocities[i * 3 + j];
-        }
-      }
-      newActiveCount++;
+  
+  async readbackAndProcessParticles() {
+    // Skip if we don't have any particles to read back
+    if (this.activeParticles <= 0) {
+      return;
     }
-    this.activeParticles = newActiveCount;
     
+    try {
+      // Create a staging buffer to read back the data
+      const stagingBuffer = this.device.createBuffer({
+        size: this.activeParticles * 8 * 4,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        label: "ParticleReadbackBuffer"
+      });
+      
+      // Copy the data from the storage buffer to the staging buffer
+      const commandEncoder = this.device.createCommandEncoder({
+        label: "ParticleReadbackEncoder"
+      });
+      
+      // Ensure we're copying a valid size (must be a multiple of 4 bytes)
+      const copySize = this.activeParticles * 8 * 4;
+      
+      commandEncoder.copyBufferToBuffer(
+        this.instanceBuffer, 0,
+        stagingBuffer, 0,
+        copySize
+      );
+      
+      this.device.queue.submit([commandEncoder.finish()]);
+      
+      // Map the staging buffer and read the data
+      await stagingBuffer.mapAsync(GPUMapMode.READ);
+      const mappedData = new Float32Array(stagingBuffer.getMappedRange());
+      
+      // Copy the data to our CPU-side array for processing
+      for (let i = 0; i < this.activeParticles * 8; i++) {
+        this.particleData[i] = mappedData[i];
+      }
+      
+      // Unmap and destroy the staging buffer
+      stagingBuffer.unmap();
+      stagingBuffer.destroy();
+      
+      // Process the data to remove dead particles
+      let newActiveCount = 0;
+      for (let i = 0; i < this.activeParticles; i++) {
+        const age = this.particleData[i * 8 + 6];
+        const lifetime = this.particleData[i * 8 + 7];
+        
+        if (age >= lifetime) continue;
+        
+        if (newActiveCount !== i) {
+          // Copy particle data
+          for (let j = 0; j < 8; j++) {
+            this.particleData[newActiveCount * 8 + j] = this.particleData[i * 8 + j];
+          }
+          
+          // Also copy the velocity data to keep arrays in sync
+          for (let j = 0; j < 4; j++) {
+            this.particleVelocities[newActiveCount * 4 + j] = this.particleVelocities[i * 4 + j];
+          }
+        }
+        newActiveCount++;
+      }
+      
+      // Update active count if it changed
+      if (newActiveCount !== this.activeParticles) {
+        this.activeParticles = newActiveCount;
+        
+        // Update GPU buffers with compacted particle data
+        this.device.queue.writeBuffer(this.instanceBuffer, 0, this.particleData, 0, this.activeParticles * 8);
+        this.device.queue.writeBuffer(this.velocityBuffer, 0, this.particleVelocities, 0, this.activeParticles * 4);
+      }
+    } catch (error) {
+      console.error("Error reading back particle data:", error);
+      // We'll skip readback but still continue with the compute shader
+    }
+  }
+  
+  updateBuffers() {
+    // No longer needed as the main updating happens in the compute shader
+    // We'll just upload the particle data directly when needed
     this.device.queue.writeBuffer(this.instanceBuffer, 0, this.particleData, 0, this.activeParticles * 8);
   }
 
@@ -233,7 +488,7 @@ export class ParticleSystem {
   updateParticleVelocities() {
     for (let i = 0; i < this.activeParticles; i++) {
       const index = i * 8; // Position data index
-      const velIndex = i * 3; // Velocity data index
+      const velIndex = i * 4; // Velocity data index
       
       // Get the current position
       const posX = this.particleData[index];
@@ -250,6 +505,68 @@ export class ParticleSystem {
       this.particleVelocities[velIndex] = dirX * this.config.particleSpeed;
       this.particleVelocities[velIndex + 1] = dirY * this.config.particleSpeed;
       this.particleVelocities[velIndex + 2] = dirZ * this.config.particleSpeed;
+    }
+    
+    // Update the velocity buffer
+    if (this.activeParticles > 0) {
+      this.device.queue.writeBuffer(this.velocityBuffer, 0, this.particleVelocities, 0, this.activeParticles * 4);
+    }
+  }
+  
+  // Methods to control physics parameters
+  setGravity(gravityValue) {
+    this.physicsSettings.gravity = gravityValue;
+  }
+  
+  setTurbulence(turbulenceValue) {
+    this.physicsSettings.turbulence = turbulenceValue;
+  }
+  
+  // Set attractor strength (positive = attraction, negative = repulsion)
+  setAttractorStrength(strengthValue) {
+    this.physicsSettings.attractorStrength = strengthValue;
+  }
+  
+  // Set attractor position
+  setAttractorPosition(x, y, z) {
+    this.physicsSettings.attractorPosition = [x, y, z];
+  }
+  
+  // Apply a preset of physics settings
+  applyPhysicsPreset(presetName) {
+    switch(presetName) {
+      case 'explosion':
+        this.physicsSettings.gravity = 2.0;
+        this.physicsSettings.turbulence = 0.5;
+        this.physicsSettings.attractorStrength = -10.0; // Strong repulsion
+        this.physicsSettings.attractorPosition = [0, 0, 0];
+        break;
+        
+      case 'fountain':
+        this.physicsSettings.gravity = 5.0;
+        this.physicsSettings.turbulence = 0.2;
+        this.physicsSettings.attractorStrength = 0;
+        break;
+        
+      case 'vortex':
+        this.physicsSettings.gravity = 0.1;
+        this.physicsSettings.turbulence = 1.0;
+        this.physicsSettings.attractorStrength = 5.0; // Strong attraction
+        this.physicsSettings.attractorPosition = [0, 0, 0];
+        break;
+        
+      case 'smoke':
+        this.physicsSettings.gravity = -0.1; // Slight upward drift
+        this.physicsSettings.turbulence = 0.8;
+        this.physicsSettings.attractorStrength = 0;
+        break;
+        
+      case 'none':
+      default:
+        this.physicsSettings.gravity = 0;
+        this.physicsSettings.turbulence = 0;
+        this.physicsSettings.attractorStrength = 0;
+        break;
     }
   }
 }
