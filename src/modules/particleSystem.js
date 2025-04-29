@@ -13,7 +13,6 @@ export class ParticleSystem {
     this.activeParticles = 0;
     this.emitting = false;
     this.currentEmissionTime = 0;
-    this.emissionTimer = 0;
     
     // Create typed arrays for particle data and velocities
     this.particleData = new Float32Array(this.MAX_PARTICLES * 8); // [x, y, z, r, g, b, age, lifetime]
@@ -128,7 +127,6 @@ export class ParticleSystem {
     // Reset counters
     this.activeParticles = 0;
     this.currentEmissionTime = 0;
-    this.emissionTimer = 0;
     
     if (this.config.burstMode) {
       // Burst mode: emit all particles at once
@@ -265,7 +263,6 @@ export class ParticleSystem {
     if (this.emitting) {
       // Update emission timer
       this.currentEmissionTime += deltaTime;
-      this.emissionTimer += deltaTime;
       
       // Check if we're still within emission duration
       if (this.currentEmissionTime < this.config.emissionDuration) {
