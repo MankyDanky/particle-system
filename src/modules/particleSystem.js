@@ -365,9 +365,13 @@ export class ParticleSystem {
             newParticleCount * 4
           );
         }
-      } else if (this.emitting) {
-        // Stop emitting once duration is reached
+      } else {
+        // Important: Explicitly stop emitting once duration is reached
         this.emitting = false;
+        // Set emission time to exactly match the duration to prevent any timing issues
+        this.currentEmissionTime = this.config.emissionDuration;
+        // Clear any remainder to prevent accidental emissions
+        this.emissionRemainder = 0;
       }
     }
     
@@ -483,8 +487,8 @@ export class ParticleSystem {
         const lifetime = this.particleData[i * 8 + 7];
         
         if (age >= lifetime) {
-          // If we're in continuous emission mode and still within emission duration
-          // and we haven't reached our emission limit, respawn the particle
+          // We no longer respawn particles at the emission duration boundary
+          // Only respawn particles during active emission within duration
           if (this.emitting && 
               this.currentEmissionTime < this.config.emissionDuration && 
               this.particlesEmittedSoFar < this.totalParticlesToEmit &&
@@ -494,7 +498,8 @@ export class ParticleSystem {
             this.particlesEmittedSoFar++;
             continue;
           }
-          continue; // Skip dead particles
+          // Skip dead particles
+          continue;
         }
         
         if (newActiveCount !== i) {
@@ -527,6 +532,11 @@ export class ParticleSystem {
 
   // Add a new helper method to respawn particles
   respawnParticle(oldIndex, newIndex) {
+    // Strict check to ensure we never respawn particles when emission has ended
+    if (!this.emitting || this.currentEmissionTime >= this.config.emissionDuration) {
+      return;
+    }
+    
     let posX, posY, posZ;
     
     if (this.config.emissionShape === 'cube') {
