@@ -46,6 +46,10 @@ export class ParticleUI {
     this.emissionShapeSelect = document.getElementById('emission-shape');
     this.cubeSettings = document.getElementById('cube-settings');
     this.sphereSettings = document.getElementById('sphere-settings');
+    this.squareSettings = document.getElementById('square-settings');
+    this.circleSettings = document.getElementById('circle-settings');
+    
+    // 3D shape settings
     this.cubeLengthSlider = document.getElementById('cube-length-slider');
     this.cubeLengthValue = document.getElementById('cube-length-value');
     this.innerLengthSlider = document.getElementById('inner-length-slider');
@@ -54,6 +58,16 @@ export class ParticleUI {
     this.innerRadiusValue = document.getElementById('inner-radius-value');
     this.outerRadiusSlider = document.getElementById('outer-radius-slider');
     this.outerRadiusValue = document.getElementById('outer-radius-value');
+    
+    // 2D shape settings
+    this.squareSizeSlider = document.getElementById('square-size-slider');
+    this.squareSizeValue = document.getElementById('square-size-value');
+    this.squareInnerSizeSlider = document.getElementById('square-inner-size-slider');
+    this.squareInnerSizeValue = document.getElementById('square-inner-size-value');
+    this.circleInnerRadiusSlider = document.getElementById('circle-inner-radius-slider');
+    this.circleInnerRadiusValue = document.getElementById('circle-inner-radius-value');
+    this.circleOuterRadiusSlider = document.getElementById('circle-outer-radius-slider');
+    this.circleOuterRadiusValue = document.getElementById('circle-outer-radius-value');
   }
 
   setupEventListeners() {
@@ -199,9 +213,23 @@ export class ParticleUI {
       if (this.config.emissionShape === 'cube') {
         this.cubeSettings.classList.remove('hidden');
         this.sphereSettings.classList.add('hidden');
+        this.squareSettings.classList.add('hidden');
+        this.circleSettings.classList.add('hidden');
       } else if (this.config.emissionShape === 'sphere') {
         this.cubeSettings.classList.add('hidden');
         this.sphereSettings.classList.remove('hidden');
+        this.squareSettings.classList.add('hidden');
+        this.circleSettings.classList.add('hidden');
+      } else if (this.config.emissionShape === 'square') {
+        this.cubeSettings.classList.add('hidden');
+        this.sphereSettings.classList.add('hidden');
+        this.squareSettings.classList.remove('hidden');
+        this.circleSettings.classList.add('hidden');
+      } else if (this.config.emissionShape === 'circle') {
+        this.cubeSettings.classList.add('hidden');
+        this.sphereSettings.classList.add('hidden');
+        this.squareSettings.classList.add('hidden');
+        this.circleSettings.classList.remove('hidden');
       }
     });
     
@@ -289,6 +317,62 @@ export class ParticleUI {
         this.config.onRespawn();
       }
     });
+    
+    // Square size slider
+    this.squareSizeSlider.addEventListener('input', () => {
+      const value = this.squareSizeSlider.value;
+      this.squareSizeValue.textContent = value;
+      this.config.squareSize = parseFloat(value);
+      
+      // Make sure outer size is greater than inner size
+      if (this.config.squareSize <= this.config.squareInnerSize) {
+        this.squareInnerSizeSlider.value = this.config.squareSize - 0.1;
+        this.squareInnerSizeValue.textContent = this.squareInnerSizeSlider.value;
+        this.config.squareInnerSize = parseFloat(this.squareInnerSizeSlider.value);
+      }
+    });
+    
+    // Square inner size slider
+    this.squareInnerSizeSlider.addEventListener('input', () => {
+      const value = this.squareInnerSizeSlider.value;
+      this.squareInnerSizeValue.textContent = value;
+      this.config.squareInnerSize = parseFloat(value);
+      
+      // Make sure inner size is less than outer size
+      if (this.config.squareInnerSize >= this.config.squareSize) {
+        this.squareSizeSlider.value = this.config.squareInnerSize + 0.1;
+        this.squareSizeValue.textContent = this.squareSizeSlider.value;
+        this.config.squareSize = parseFloat(this.squareSizeSlider.value);
+      }
+    });
+    
+    // Circle inner radius slider
+    this.circleInnerRadiusSlider.addEventListener('input', () => {
+      const value = this.circleInnerRadiusSlider.value;
+      this.circleInnerRadiusValue.textContent = value;
+      this.config.circleInnerRadius = parseFloat(value);
+      
+      // Make sure inner radius is less than outer radius
+      if (this.config.circleInnerRadius >= this.config.circleOuterRadius) {
+        this.circleOuterRadiusSlider.value = this.config.circleInnerRadius + 0.1;
+        this.circleOuterRadiusValue.textContent = this.circleOuterRadiusSlider.value;
+        this.config.circleOuterRadius = parseFloat(this.circleOuterRadiusSlider.value);
+      }
+    });
+    
+    // Circle outer radius slider
+    this.circleOuterRadiusSlider.addEventListener('input', () => {
+      const value = this.circleOuterRadiusSlider.value;
+      this.circleOuterRadiusValue.textContent = value;
+      this.config.circleOuterRadius = parseFloat(value);
+      
+      // Make sure outer radius is greater than inner radius
+      if (this.config.circleOuterRadius <= this.config.circleInnerRadius) {
+        this.circleInnerRadiusSlider.value = this.config.circleOuterRadius - 0.1;
+        this.circleInnerRadiusValue.textContent = this.circleInnerRadiusSlider.value;
+        this.config.circleInnerRadius = parseFloat(this.circleInnerRadiusSlider.value);
+      }
+    });
   }
 
   updateUIState() {
@@ -329,6 +413,17 @@ export class ParticleUI {
     this.outerRadiusSlider.value = this.config.outerRadius;
     this.outerRadiusValue.textContent = this.config.outerRadius;
     
+    // Initialize 2D shape settings
+    this.squareSizeSlider.value = this.config.squareSize;
+    this.squareSizeValue.textContent = this.config.squareSize;
+    this.squareInnerSizeSlider.value = this.config.squareInnerSize;
+    this.squareInnerSizeValue.textContent = this.config.squareInnerSize;
+    
+    this.circleInnerRadiusSlider.value = this.config.circleInnerRadius;
+    this.circleInnerRadiusValue.textContent = this.config.circleInnerRadius;
+    this.circleOuterRadiusSlider.value = this.config.circleOuterRadius;
+    this.circleOuterRadiusValue.textContent = this.config.circleOuterRadius;
+    
     this.bloomCheckbox.checked = this.config.bloomEnabled;
     this.bloomIntensitySlider.value = this.config.bloomIntensity;
     this.bloomIntensityValue.textContent = this.config.bloomIntensity.toFixed(1);
@@ -353,9 +448,23 @@ export class ParticleUI {
     if (this.config.emissionShape === 'cube') {
       this.cubeSettings.classList.remove('hidden');
       this.sphereSettings.classList.add('hidden');
+      this.squareSettings.classList.add('hidden');
+      this.circleSettings.classList.add('hidden');
     } else if (this.config.emissionShape === 'sphere') {
       this.cubeSettings.classList.add('hidden');
       this.sphereSettings.classList.remove('hidden');
+      this.squareSettings.classList.add('hidden');
+      this.circleSettings.classList.add('hidden');
+    } else if (this.config.emissionShape === 'square') {
+      this.cubeSettings.classList.add('hidden');
+      this.sphereSettings.classList.add('hidden');
+      this.squareSettings.classList.remove('hidden');
+      this.circleSettings.classList.add('hidden');
+    } else if (this.config.emissionShape === 'circle') {
+      this.cubeSettings.classList.add('hidden');
+      this.sphereSettings.classList.add('hidden');
+      this.squareSettings.classList.add('hidden');
+      this.circleSettings.classList.remove('hidden');
     }
     
     if (this.config.bloomEnabled) {
