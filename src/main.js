@@ -235,6 +235,10 @@ async function main() {
         selectedConfig.gravityStrength = value;
       } else if (param === 'turbulence') {
         system.setTurbulence(value);
+      } else if (param === 'attractor') {
+        system.setAttractor(value.strength, value.position);
+        selectedConfig.attractorStrength = value.strength;
+        selectedConfig.attractorPosition = value.position;
       }
     };
     

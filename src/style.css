@@ -286,6 +286,18 @@ input[type="range"]::-moz-range-thumb {
     width: 280px;
 }
 
+.attractor-controls {
+  margin-top: 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding-top: 15px;
+}
+
+.attractor-controls h4 {
+  margin: 10px 0;
+  font-weight: 500;
+  font-size: 14px;
+}
+
 .velocity-override-container {
   margin-top: 15px;
   border-top: 1px solid rgba(255, 255, 255, 0.2);

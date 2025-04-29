@@ -217,6 +217,18 @@ export class ParticleUI {
     this.gravityStrengthValue = document.getElementById('gravity-strength-value');
     this.gravityStrengthContainer = document.getElementById('gravity-strength-container');
     
+    // Attractor
+    this.attractorCheckbox = document.getElementById('attractor-checkbox');
+    this.attractorStrengthSlider = document.getElementById('attractor-strength-slider');
+    this.attractorStrengthValue = document.getElementById('attractor-strength-value');
+    this.attractorPositionXSlider = document.getElementById('attractor-position-x-slider');
+    this.attractorPositionYSlider = document.getElementById('attractor-position-y-slider');
+    this.attractorPositionZSlider = document.getElementById('attractor-position-z-slider');
+    this.attractorPositionXValue = document.getElementById('attractor-position-x-value');
+    this.attractorPositionYValue = document.getElementById('attractor-position-y-value');
+    this.attractorPositionZValue = document.getElementById('attractor-position-z-value');
+    this.attractorControlsContainer = document.getElementById('attractor-controls-container');
+    
     // Shape UI elements
     this.emissionShapeSelect = document.getElementById('emission-shape');
     this.cubeSettings = document.getElementById('cube-settings');
@@ -298,6 +310,103 @@ export class ParticleUI {
       
       if (this.config.gravityEnabled && this.config.onPhysicsChange) {
         this.config.onPhysicsChange('gravity', parseFloat(value));
+      }
+    });
+    
+    // Attractor checkbox
+    this.attractorCheckbox.addEventListener('change', this.onAttractorChange = () => {
+      this.config.attractorEnabled = this.attractorCheckbox.checked;
+      
+      // Show/hide attractor controls based on attractor enabled state
+      if (this.config.attractorEnabled) {
+        this.attractorControlsContainer.classList.remove('hidden');
+        // Set attractor to the initial values
+        const attractorStrength = parseFloat(this.attractorStrengthSlider.value);
+        const posX = parseFloat(this.attractorPositionXSlider.value);
+        const posY = parseFloat(this.attractorPositionYSlider.value);
+        const posZ = parseFloat(this.attractorPositionZSlider.value);
+        
+        if (this.config.onPhysicsChange) {
+          this.config.onPhysicsChange('attractor', {
+            strength: attractorStrength,
+            position: [posX, posY, posZ]
+          });
+        }
+      } else {
+        this.attractorControlsContainer.classList.add('hidden');
+        // Disable attractor when checkbox is unchecked
+        if (this.config.onPhysicsChange) {
+          this.config.onPhysicsChange('attractor', {
+            strength: 0,
+            position: [0, 0, 0]
+          });
+        }
+      }
+    });
+    
+    // Attractor strength slider
+    this.attractorStrengthSlider.addEventListener('input', this.onAttractorStrengthChange = () => {
+      const value = this.attractorStrengthSlider.value;
+      this.attractorStrengthValue.textContent = value;
+      
+      if (this.config.attractorEnabled && this.config.onPhysicsChange) {
+        this.config.onPhysicsChange('attractor', {
+          strength: parseFloat(value),
+          position: [
+            parseFloat(this.attractorPositionXSlider.value),
+            parseFloat(this.attractorPositionYSlider.value),
+            parseFloat(this.attractorPositionZSlider.value)
+          ]
+        });
+      }
+    });
+    
+    // Attractor position sliders
+    this.attractorPositionXSlider.addEventListener('input', this.onAttractorPositionXChange = () => {
+      const value = this.attractorPositionXSlider.value;
+      this.attractorPositionXValue.textContent = value;
+      
+      if (this.config.attractorEnabled && this.config.onPhysicsChange) {
+        this.config.onPhysicsChange('attractor', {
+          strength: parseFloat(this.attractorStrengthSlider.value),
+          position: [
+            parseFloat(value),
+            parseFloat(this.attractorPositionYSlider.value),
+            parseFloat(this.attractorPositionZSlider.value)
+          ]
+        });
+      }
+    });
+    
+    this.attractorPositionYSlider.addEventListener('input', this.onAttractorPositionYChange = () => {
+      const value = this.attractorPositionYSlider.value;
+      this.attractorPositionYValue.textContent = value;
+      
+      if (this.config.attractorEnabled && this.config.onPhysicsChange) {
+        this.config.onPhysicsChange('attractor', {
+          strength: parseFloat(this.attractorStrengthSlider.value),
+          position: [
+            parseFloat(this.attractorPositionXSlider.value),
+            parseFloat(value),
+            parseFloat(this.attractorPositionZSlider.value)
+          ]
+        });
+      }
+    });
+    
+    this.attractorPositionZSlider.addEventListener('input', this.onAttractorPositionZChange = () => {
+      const value = this.attractorPositionZSlider.value;
+      this.attractorPositionZValue.textContent = value;
+      
+      if (this.config.attractorEnabled && this.config.onPhysicsChange) {
+        this.config.onPhysicsChange('attractor', {
+          strength: parseFloat(this.attractorStrengthSlider.value),
+          position: [
+            parseFloat(this.attractorPositionXSlider.value),
+            parseFloat(this.attractorPositionYSlider.value),
+            parseFloat(value)
+          ]
+        });
       }
     });
     
@@ -767,6 +876,23 @@ export class ParticleUI {
     if (this.onGravityStrengthChange) {
       this.gravityStrengthSlider.removeEventListener('input', this.onGravityStrengthChange);
     }
+    
+    // Attractor event listeners
+    if (this.onAttractorChange) {
+      this.attractorCheckbox.removeEventListener('change', this.onAttractorChange);
+    }
+    if (this.onAttractorStrengthChange) {
+      this.attractorStrengthSlider.removeEventListener('input', this.onAttractorStrengthChange);
+    }
+    if (this.onAttractorPositionXChange) {
+      this.attractorPositionXSlider.removeEventListener('input', this.onAttractorPositionXChange);
+    }
+    if (this.onAttractorPositionYChange) {
+      this.attractorPositionYSlider.removeEventListener('input', this.onAttractorPositionYChange);
+    }
+    if (this.onAttractorPositionZChange) {
+      this.attractorPositionZSlider.removeEventListener('input', this.onAttractorPositionZChange);
+    }
   }
 
   updateUIState() {
@@ -847,6 +973,27 @@ export class ParticleUI {
       this.gravityStrengthContainer.classList.remove('hidden');
     } else {
       this.gravityStrengthContainer.classList.add('hidden');
+    }
+    
+    // Initialize attractor settings
+    this.attractorCheckbox.checked = this.config.attractorEnabled || false;
+    this.attractorStrengthSlider.value = this.config.attractorStrength || 1;
+    this.attractorStrengthValue.textContent = this.config.attractorStrength || 1;
+    
+    // Initialize attractor position sliders with default values if not set
+    const attractorPosition = this.config.attractorPosition || [0, 0, 0];
+    this.attractorPositionXSlider.value = attractorPosition[0];
+    this.attractorPositionYSlider.value = attractorPosition[1];
+    this.attractorPositionZSlider.value = attractorPosition[2];
+    this.attractorPositionXValue.textContent = attractorPosition[0];
+    this.attractorPositionYValue.textContent = attractorPosition[1];
+    this.attractorPositionZValue.textContent = attractorPosition[2];
+    
+    // Show/hide attractor controls
+    if (this.config.attractorEnabled) {
+      this.attractorControlsContainer.classList.remove('hidden');
+    } else {
+      this.attractorControlsContainer.classList.add('hidden');
     }
     
     this.fadeCheckbox.checked = this.config.fadeEnabled;

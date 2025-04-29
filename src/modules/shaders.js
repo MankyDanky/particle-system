@@ -248,10 +248,14 @@ export const particlePhysicsShader = `
     gravity: f32,
     turbulence: f32,
     attractorStrength: f32,
-    padding: f32, // Adding padding to ensure 16-byte alignment
-    attractorPosition: vec3<f32>,
-    padding2: f32, // Adding padding to ensure 16-byte alignment
-  }
+    padding: f32,
+    attractorPositionX: f32,
+    attractorPositionY: f32,
+    attractorPositionZ: f32,
+    padding2: f32,
+    padding3: f32,
+    padding4: f32,
+  };
 
   // Updated struct to match actual memory layout [x, y, z, r, g, b, age, lifetime]
   struct ParticleData {
@@ -310,29 +314,32 @@ export const particlePhysicsShader = `
       modifiedVelocity.y -= physics.gravity * physics.deltaTime;
     }
     
+    // Apply attractor force if enabled
+    if (physics.attractorStrength > 0.0) {
+      // Calculate direction vector from particle to attractor
+      let attractorPos = vec3<f32>(physics.attractorPositionX, physics.attractorPositionY, physics.attractorPositionZ);
+      let toAttractor = attractorPos - vec3<f32>(posX, posY, posZ);
+      let distance = length(toAttractor);
+      
+      // Avoid division by zero and limit effect at very close range
+      if (distance > 0.1) {
+        // Normalize direction and apply force based on distance (inverse square law)
+        let attractionForce = normalize(toAttractor) * physics.attractorStrength / max(distance * distance, 0.01);
+        modifiedVelocity += attractionForce * physics.deltaTime;
+      }
+    }
+    
     let timeScale = min(physics.deltaTime, 0.033); // Cap max time step to prevent large jumps
     
-    // If gravity is enabled
-    if (physics.gravity > 0.0) {
-      // Store the gravitational velocity for the next frame
-      velocities[velocityIndex].velocity = modifiedVelocity;
-      
-      // Directly apply the velocity as-is
-      let moveDistance = modifiedVelocity * timeScale;
-      
-      // Update position with the calculated movement
-      particleBuffer[baseIndex] = posX + moveDistance.x;
-      particleBuffer[baseIndex + 1u] = posY + moveDistance.y;
-      particleBuffer[baseIndex + 2u] = posZ + moveDistance.z;
-    } else {
-      // Just use the current velocity directly without normalization
-      // This ensures velocity overrides work correctly, including zeros
-      let moveDistance = modifiedVelocity * timeScale;
-      
-      // Update position with the calculated movement
-      particleBuffer[baseIndex] = posX + moveDistance.x;
-      particleBuffer[baseIndex + 1u] = posY + moveDistance.y;
-      particleBuffer[baseIndex + 2u] = posZ + moveDistance.z;
-    }
+    // Store the modified velocity for the next frame regardless of gravity
+    velocities[velocityIndex].velocity = modifiedVelocity;
+    
+    // Apply the velocity
+    let moveDistance = modifiedVelocity * timeScale;
+    
+    // Update position with the calculated movement
+    particleBuffer[baseIndex] = posX + moveDistance.x;
+    particleBuffer[baseIndex + 1u] = posY + moveDistance.y;
+    particleBuffer[baseIndex + 2u] = posZ + moveDistance.z;
   }
 `;

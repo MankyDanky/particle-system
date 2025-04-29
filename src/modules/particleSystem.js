@@ -61,10 +61,11 @@ export class ParticleSystem {
     
     // Set default physics values
     this.physicsSettings = {
+      deltaTime: 0.016,
       gravity: 0.0,
       turbulence: 0.0,
-      attractorStrength: 0,
-      attractorPosition: [0, 0, 0]
+      attractorStrength: 0.0,
+      attractorPosition: [0.0, 0.0, 0.0]
     };
     
     // Velocity override settings
@@ -964,6 +965,11 @@ export class ParticleSystem {
    
   setGravity(gravityValue) {
     this.physicsSettings.gravity = gravityValue;
+  }
+  
+  setAttractor(strength, position) {
+    this.physicsSettings.attractorStrength = strength;
+    this.physicsSettings.attractorPosition = position;
   }
 }
 
