@@ -294,7 +294,7 @@ async function main() {
   const quadVertexBuffer = createBuffer(
     device, 
     quadVertices, 
-    GPUBufferUsage.VERTEX
+    GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
   );
   
   const quadIndexBuffer = createBuffer(
