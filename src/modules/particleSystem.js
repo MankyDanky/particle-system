@@ -28,7 +28,7 @@ export class ParticleSystem {
     // Create GPU buffers for compute shader
     this.velocityBuffer = device.createBuffer({
       size: this.MAX_PARTICLES * 4 * 4, // vec3 + padding
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
       label: "particleVelocityBuffer"
     });
     
@@ -589,41 +589,74 @@ export class ParticleSystem {
     }
     
     try {
-      // Create a staging buffer to read back the data
-      const stagingBuffer = this.device.createBuffer({
+      // Create staging buffers to read back both position and velocity data
+      const particleDataStagingBuffer = this.device.createBuffer({
         size: this.activeParticles * 8 * 4,
         usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-        label: "ParticleReadbackBuffer"
+        label: "ParticleDataReadbackBuffer"
       });
       
-      // Copy the data from the storage buffer to the staging buffer
+      const velocityStagingBuffer = this.device.createBuffer({
+        size: this.activeParticles * 4 * 4,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        label: "VelocityReadbackBuffer"
+      });
+      
+      // Copy both buffers using a single command encoder
       const commandEncoder = this.device.createCommandEncoder({
         label: "ParticleReadbackEncoder"
       });
       
-      // Ensure we're copying a valid size (must be a multiple of 4 bytes)
-      const copySize = this.activeParticles * 8 * 4;
-      
+      // Copy particle data
+      const particleDataCopySize = this.activeParticles * 8 * 4;
       commandEncoder.copyBufferToBuffer(
         this.instanceBuffer, 0,
-        stagingBuffer, 0,
-        copySize
+        particleDataStagingBuffer, 0,
+        particleDataCopySize
+      );
+      
+      // Copy velocity data
+      const velocityCopySize = this.activeParticles * 4 * 4;
+      commandEncoder.copyBufferToBuffer(
+        this.velocityBuffer, 0,
+        velocityStagingBuffer, 0,
+        velocityCopySize
       );
       
       this.device.queue.submit([commandEncoder.finish()]);
       
-      // Map the staging buffer and read the data
-      await stagingBuffer.mapAsync(GPUMapMode.READ);
-      const mappedData = new Float32Array(stagingBuffer.getMappedRange());
+      // Map and read both buffers in parallel
+      const [particleDataArray, velocityArray] = await Promise.all([
+        (async () => {
+          await particleDataStagingBuffer.mapAsync(GPUMapMode.READ);
+          const mapped = new Float32Array(particleDataStagingBuffer.getMappedRange());
+          const data = new Float32Array(mapped.length);
+          data.set(mapped);
+          particleDataStagingBuffer.unmap();
+          return data;
+        })(),
+        (async () => {
+          await velocityStagingBuffer.mapAsync(GPUMapMode.READ);
+          const mapped = new Float32Array(velocityStagingBuffer.getMappedRange());
+          const data = new Float32Array(mapped.length);
+          data.set(mapped);
+          velocityStagingBuffer.unmap();
+          return data;
+        })()
+      ]);
       
-      // Copy the data to our CPU-side array for processing
+      // Copy the data to our CPU-side arrays for processing
       for (let i = 0; i < this.activeParticles * 8; i++) {
-        this.particleData[i] = mappedData[i];
+        this.particleData[i] = particleDataArray[i];
       }
       
-      // Unmap and destroy the staging buffer
-      stagingBuffer.unmap();
-      stagingBuffer.destroy();
+      for (let i = 0; i < this.activeParticles * 4; i++) {
+        this.particleVelocities[i] = velocityArray[i];
+      }
+      
+      // Clean up staging buffers
+      particleDataStagingBuffer.destroy();
+      velocityStagingBuffer.destroy();
       
       // Process the data to remove dead particles
       let newActiveCount = 0;
@@ -888,58 +921,9 @@ export class ParticleSystem {
       this.device.queue.writeBuffer(this.velocityBuffer, 0, this.particleVelocities, 0, this.activeParticles * 4);
     }
   }
-  
+   
   setGravity(gravityValue) {
     this.physicsSettings.gravity = gravityValue;
-  }
-  
-  setTurbulence(turbulenceValue) {
-    this.physicsSettings.turbulence = turbulenceValue;
-  }
-  
-  setAttractorStrength(strengthValue) {
-    this.physicsSettings.attractorStrength = strengthValue;
-  }
-  
-  setAttractorPosition(x, y, z) {
-    this.physicsSettings.attractorPosition = [x, y, z];
-  }
-  
-  applyPhysicsPreset(presetName) {
-    switch(presetName) {
-      case 'explosion':
-        this.physicsSettings.gravity = 2.0;
-        this.physicsSettings.turbulence = 0.5;
-        this.physicsSettings.attractorStrength = -10.0;
-        this.physicsSettings.attractorPosition = [0, 0, 0];
-        break;
-        
-      case 'fountain':
-        this.physicsSettings.gravity = 5.0;
-        this.physicsSettings.turbulence = 0.2;
-        this.physicsSettings.attractorStrength = 0;
-        break;
-        
-      case 'vortex':
-        this.physicsSettings.gravity = 0.1;
-        this.physicsSettings.turbulence = 1.0;
-        this.physicsSettings.attractorStrength = 5.0;
-        this.physicsSettings.attractorPosition = [0, 0, 0];
-        break;
-        
-      case 'smoke':
-        this.physicsSettings.gravity = -0.1;
-        this.physicsSettings.turbulence = 0.8;
-        this.physicsSettings.attractorStrength = 0;
-        break;
-        
-      case 'none':
-      default:
-        this.physicsSettings.gravity = 0;
-        this.physicsSettings.turbulence = 0;
-        this.physicsSettings.attractorStrength = 0;
-        break;
-    }
   }
 }
 
