@@ -310,35 +310,14 @@ export const particlePhysicsShader = `
       modifiedVelocity.y -= physics.gravity * physics.deltaTime;
     }
     
-    // Use the original velocity direction but apply the current speed setting
-    // This ensures consistent movement regardless of emission rate or frame rate
-    var normalizedVelocity: vec3<f32>;
-    let velLength = length(modifiedVelocity);
+    let timeScale = min(physics.deltaTime, 0.033); // Cap max time step to prevent large jumps
     
-    if (velLength > 0.001) {
-      normalizedVelocity = modifiedVelocity / velLength;
-    } else {
-      // If velocity is nearly zero, use position as fallback for direction
-      let posLength = length(vec3<f32>(posX, posY, posZ));
-      if (posLength > 0.001) {
-        normalizedVelocity = vec3<f32>(posX, posY, posZ) / posLength;
-      } else {
-        // Default upward direction if no other reference
-        normalizedVelocity = vec3<f32>(0.0, 1.0, 0.0);
-      }
-    }
-    
-    // Apply speed setting - this is now uniform regardless of emission rate
-    // Using a fixed base movement distance per second ensures consistency
-    let moveSpeed = physics.particleSpeed * 2.0; // Base speed multiplier
-    let scaledVelocity = normalizedVelocity * moveSpeed;
-    
-    // If gravity is enabled, preserve the modified velocity direction but keep the desired speed
+    // If gravity is enabled
     if (physics.gravity > 0.0) {
       // Store the gravitational velocity for the next frame
       velocities[velocityIndex].velocity = modifiedVelocity;
-      // Use the non-normalized gravity-affected velocity for movement
-      let timeScale = min(physics.deltaTime, 0.033); // Cap max time step to prevent large jumps
+      
+      // Directly apply the velocity as-is
       let moveDistance = modifiedVelocity * timeScale;
       
       // Update position with the calculated movement
@@ -346,13 +325,9 @@ export const particlePhysicsShader = `
       particleBuffer[baseIndex + 1u] = posY + moveDistance.y;
       particleBuffer[baseIndex + 2u] = posZ + moveDistance.z;
     } else {
-      // Update velocity in buffer - store the scaled velocity for consistency
-      velocities[velocityIndex].velocity = scaledVelocity;
-      
-      // Apply movement with time scaling - this ensures smooth motion at all frame rates
-      // The fixed delta scaling ensures consistent movement regardless of actual time steps
-      let timeScale = min(physics.deltaTime, 0.033); // Cap max time step to prevent large jumps
-      let moveDistance = scaledVelocity * timeScale;
+      // Just use the current velocity directly without normalization
+      // This ensures velocity overrides work correctly, including zeros
+      let moveDistance = modifiedVelocity * timeScale;
       
       // Update position with the calculated movement
       particleBuffer[baseIndex] = posX + moveDistance.x;

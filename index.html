@@ -174,6 +174,52 @@
         <span id="speed-value">1</span>
       </div>
       
+      <div class="velocity-override-container">
+        <h4>Velocity Direction Override</h4>
+        
+        <div class="axis-control">
+          <div class="axis-control-row">
+            <span class="axis-label">X:</span>
+            <div class="checkbox-container" style="margin: 0; flex: 1;">
+              <input type="checkbox" id="override-x-velocity-checkbox">
+              <label for="override-x-velocity-checkbox" style="width: auto;">Override X Velocity</label>
+            </div>
+          </div>
+          <div id="x-velocity-slider-container" class="hidden">
+            <input type="range" id="x-velocity-slider" min="-5" max="5" value="0" step="0.1">
+            <span id="x-velocity-value">0</span>
+          </div>
+        </div>
+        
+        <div class="axis-control">
+          <div class="axis-control-row">
+            <span class="axis-label">Y:</span>
+            <div class="checkbox-container" style="margin: 0; flex: 1;">
+              <input type="checkbox" id="override-y-velocity-checkbox">
+              <label for="override-y-velocity-checkbox" style="width: auto;">Override Y Velocity</label>
+            </div>
+          </div>
+          <div id="y-velocity-slider-container" class="hidden">
+            <input type="range" id="y-velocity-slider" min="-5" max="5" value="0" step="0.1">
+            <span id="y-velocity-value">0</span>
+          </div>
+        </div>
+        
+        <div class="axis-control">
+          <div class="axis-control-row">
+            <span class="axis-label">Z:</span>
+            <div class="checkbox-container" style="margin: 0; flex: 1;">
+              <input type="checkbox" id="override-z-velocity-checkbox">
+              <label for="override-z-velocity-checkbox" style="width: auto;">Override Z Velocity</label>
+            </div>
+          </div>
+          <div id="z-velocity-slider-container" class="hidden">
+            <input type="range" id="z-velocity-slider" min="-5" max="5" value="0" step="0.1">
+            <span id="z-velocity-value">0</span>
+          </div>
+        </div>
+      </div>
+      
       <div class="checkbox-container">
         <input type="checkbox" id="gravity-checkbox">
         <label for="gravity-checkbox">Enable Gravity</label>

@@ -67,6 +67,16 @@ export class ParticleSystem {
       attractorPosition: [0, 0, 0]
     };
     
+    // Velocity override settings
+    this.velocityOverrides = {
+      overrideX: false,
+      overrideY: false,
+      overrideZ: false,
+      xVelocity: 0,
+      yVelocity: 0,
+      zVelocity: 0
+    };
+    
     // Fixed timestep physics system for consistent updates
     this.fixedDeltaTime = 1.0 / 60.0; // Consistent 60Hz physics updates
     this.physicsClock = 0;
@@ -412,9 +422,24 @@ export class ParticleSystem {
     }
     
     // Store velocity vector (scaled by speed)
-    this.particleVelocities[velIndex] = dirX * this.config.particleSpeed;
-    this.particleVelocities[velIndex + 1] = dirY * this.config.particleSpeed;
-    this.particleVelocities[velIndex + 2] = dirZ * this.config.particleSpeed;
+    if (this.velocityOverrides.overrideX) {
+      this.particleVelocities[velIndex] = this.velocityOverrides.xVelocity;
+    } else {
+      this.particleVelocities[velIndex] = dirX * this.config.particleSpeed;
+    }
+    
+    if (this.velocityOverrides.overrideY) {
+      this.particleVelocities[velIndex + 1] = this.velocityOverrides.yVelocity;
+    } else {
+      this.particleVelocities[velIndex + 1] = dirY * this.config.particleSpeed;
+    }
+    
+    if (this.velocityOverrides.overrideZ) {
+      this.particleVelocities[velIndex + 2] = this.velocityOverrides.zVelocity;
+    } else {
+      this.particleVelocities[velIndex + 2] = dirZ * this.config.particleSpeed;
+    }
+    
     this.particleVelocities[velIndex + 3] = 0; // padding
     
     // Color
@@ -831,9 +856,24 @@ export class ParticleSystem {
     }
     
     // Store velocity vector
-    this.particleVelocities[velIndex] = dirX * this.config.particleSpeed;
-    this.particleVelocities[velIndex + 1] = dirY * this.config.particleSpeed;
-    this.particleVelocities[velIndex + 2] = dirZ * this.config.particleSpeed;
+    if (this.velocityOverrides.overrideX) {
+      this.particleVelocities[velIndex] = this.velocityOverrides.xVelocity;
+    } else {
+      this.particleVelocities[velIndex] = dirX * this.config.particleSpeed;
+    }
+    
+    if (this.velocityOverrides.overrideY) {
+      this.particleVelocities[velIndex + 1] = this.velocityOverrides.yVelocity;
+    } else {
+      this.particleVelocities[velIndex + 1] = dirY * this.config.particleSpeed;
+    }
+    
+    if (this.velocityOverrides.overrideZ) {
+      this.particleVelocities[velIndex + 2] = this.velocityOverrides.zVelocity;
+    } else {
+      this.particleVelocities[velIndex + 2] = dirZ * this.config.particleSpeed;
+    }
+    
     this.particleVelocities[velIndex + 3] = 0;
     
     // Color

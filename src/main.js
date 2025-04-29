@@ -195,6 +195,10 @@ async function main() {
     // Update callback methods to point to the right system
     const activeSystem = particleSystemManager.getActiveSystem();
     
+    selectedConfig.getActiveSystem = () => {
+      return activeSystem;
+    };
+    
     // Set up callbacks specific to this system
     selectedConfig.onAppearanceChange = () => {
       // Update this specific system's appearance uniform buffer

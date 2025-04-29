@@ -285,3 +285,31 @@ input[type="range"]::-moz-range-thumb {
 .controls {
     width: 280px;
 }
+
+.velocity-override-container {
+  margin-top: 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding-top: 15px;
+}
+
+.velocity-override-container h4 {
+  margin: 0 0 10px 0;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.axis-control {
+  margin: 8px 0;
+}
+
+.axis-control-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.axis-label {
+  width: 20px;
+  font-weight: 500;
+  color: #ddd;
+}
