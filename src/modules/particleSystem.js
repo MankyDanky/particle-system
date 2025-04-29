@@ -46,6 +46,16 @@ export class ParticleSystem {
       label: "appearanceUniformBuffer"
     });
     
+    // Create bloom intensity buffer specific to this system
+    this.bloomIntensityBuffer = device.createBuffer({
+      size: 64, // intensity (f32) + padding
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      label: "systemBloomIntensityBuffer"
+    });
+    
+    // Initialize bloom intensity buffer with this system's bloom intensity
+    this.updateBloomIntensity();
+    
     // Initialize appearance uniform buffer with this system's settings
     this.updateAppearanceUniform();
     
@@ -90,6 +100,12 @@ export class ParticleSystem {
     ]);
     
     this.device.queue.writeBuffer(this.appearanceUniformBuffer, 0, appearanceData);
+  }
+  
+  updateBloomIntensity() {
+    const bloomIntensityData = new Float32Array(16).fill(0);
+    bloomIntensityData[0] = this.config.bloomIntensity || 1.0;
+    this.device.queue.writeBuffer(this.bloomIntensityBuffer, 0, bloomIntensityData);
   }
 
   async initComputePipeline(device) {
