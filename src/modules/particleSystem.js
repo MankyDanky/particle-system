@@ -178,7 +178,7 @@ export class ParticleSystem {
       
       // Calculate max particles based on emission rate and duration
       const baseLifetime = this.config.lifetime || 5;
-      const effectiveDuration = Math.min(this.config.emissionDuration || 10, baseLifetime);
+      const effectiveDuration = Math.max(this.config.emissionDuration || 10, baseLifetime);
       this.particleCount = Math.min(Math.ceil((this.config.emissionRate || 10) * effectiveDuration), this.MAX_PARTICLES);
     }
   }
