@@ -636,56 +636,47 @@ export class ParticleUI {
     
     // Velocity override checkboxes and sliders
     this.overrideXVelocityCheckbox.addEventListener('change', this.onOverrideXVelocityChange = () => {
-      const activeSystem = this.config.getActiveSystem();
-      if (activeSystem) {
-        activeSystem.velocityOverrides.overrideX = this.overrideXVelocityCheckbox.checked;
-        
-        if (this.overrideXVelocityCheckbox.checked) {
-          this.xVelocitySliderContainer.classList.remove('hidden');
-          activeSystem.velocityOverrides.xVelocity = parseFloat(this.xVelocitySlider.value);
-        } else {
-          this.xVelocitySliderContainer.classList.add('hidden');
-        }
-        
-        if (this.config.onRespawn) {
-          this.config.onRespawn();
-        }
+      this.config.overrideXVelocity = this.overrideXVelocityCheckbox.checked;
+      
+      if (this.overrideXVelocityCheckbox.checked) {
+        this.xVelocitySliderContainer.classList.remove('hidden');
+        this.config.xVelocity = parseFloat(this.xVelocitySlider.value);
+      } else {
+        this.xVelocitySliderContainer.classList.add('hidden');
+      }
+      
+      if (this.config.onRespawn) {
+        this.config.onRespawn();
       }
     });
     
     this.overrideYVelocityCheckbox.addEventListener('change', this.onOverrideYVelocityChange = () => {
-      const activeSystem = this.config.getActiveSystem();
-      if (activeSystem) {
-        activeSystem.velocityOverrides.overrideY = this.overrideYVelocityCheckbox.checked;
-        
-        if (this.overrideYVelocityCheckbox.checked) {
-          this.yVelocitySliderContainer.classList.remove('hidden');
-          activeSystem.velocityOverrides.yVelocity = parseFloat(this.yVelocitySlider.value);
-        } else {
-          this.yVelocitySliderContainer.classList.add('hidden');
-        }
-        
-        if (this.config.onRespawn) {
-          this.config.onRespawn();
-        }
+      this.config.overrideYVelocity = this.overrideYVelocityCheckbox.checked;
+      
+      if (this.overrideYVelocityCheckbox.checked) {
+        this.yVelocitySliderContainer.classList.remove('hidden');
+        this.config.yVelocity = parseFloat(this.yVelocitySlider.value);
+      } else {
+        this.yVelocitySliderContainer.classList.add('hidden');
+      }
+      
+      if (this.config.onRespawn) {
+        this.config.onRespawn();
       }
     });
     
     this.overrideZVelocityCheckbox.addEventListener('change', this.onOverrideZVelocityChange = () => {
-      const activeSystem = this.config.getActiveSystem();
-      if (activeSystem) {
-        activeSystem.velocityOverrides.overrideZ = this.overrideZVelocityCheckbox.checked;
-        
-        if (this.overrideZVelocityCheckbox.checked) {
-          this.zVelocitySliderContainer.classList.remove('hidden');
-          activeSystem.velocityOverrides.zVelocity = parseFloat(this.zVelocitySlider.value);
-        } else {
-          this.zVelocitySliderContainer.classList.add('hidden');
-        }
-        
-        if (this.config.onRespawn) {
-          this.config.onRespawn();
-        }
+      this.config.overrideZVelocity = this.overrideZVelocityCheckbox.checked;
+      
+      if (this.overrideZVelocityCheckbox.checked) {
+        this.zVelocitySliderContainer.classList.remove('hidden');
+        this.config.zVelocity = parseFloat(this.zVelocitySlider.value);
+      } else {
+        this.zVelocitySliderContainer.classList.add('hidden');
+      }
+      
+      if (this.config.onRespawn) {
+        this.config.onRespawn();
       }
     });
     
@@ -693,9 +684,8 @@ export class ParticleUI {
       const value = this.xVelocitySlider.value;
       this.xVelocityValue.textContent = value;
       
-      const activeSystem = this.config.getActiveSystem();
-      if (activeSystem && activeSystem.velocityOverrides.overrideX) {
-        activeSystem.velocityOverrides.xVelocity = parseFloat(value);
+      if (this.config.overrideXVelocity) {
+        this.config.xVelocity = parseFloat(value);
         
         if (this.config.onRespawn) {
           this.config.onRespawn();
@@ -707,9 +697,8 @@ export class ParticleUI {
       const value = this.yVelocitySlider.value;
       this.yVelocityValue.textContent = value;
       
-      const activeSystem = this.config.getActiveSystem();
-      if (activeSystem && activeSystem.velocityOverrides.overrideY) {
-        activeSystem.velocityOverrides.yVelocity = parseFloat(value);
+      if (this.config.overrideYVelocity) {
+        this.config.yVelocity = parseFloat(value);
         
         if (this.config.onRespawn) {
           this.config.onRespawn();
@@ -721,9 +710,8 @@ export class ParticleUI {
       const value = this.zVelocitySlider.value;
       this.zVelocityValue.textContent = value;
       
-      const activeSystem = this.config.getActiveSystem();
-      if (activeSystem && activeSystem.velocityOverrides.overrideZ) {
-        activeSystem.velocityOverrides.zVelocity = parseFloat(value);
+      if (this.config.overrideZVelocity) {
+        this.config.zVelocity = parseFloat(value);
         
         if (this.config.onRespawn) {
           this.config.onRespawn();
@@ -897,52 +885,39 @@ export class ParticleUI {
 
   updateUIState() {
     // Initialize velocity override controls
-    let activeSystem = null;
     
-    // Safely get the active system if getActiveSystem exists, otherwise skip velocity overrides
-    if (typeof this.config.getActiveSystem === 'function') {
-      activeSystem = this.config.getActiveSystem();
+    // Set initial checkbox state
+    this.overrideXVelocityCheckbox.checked = this.config.overrideXVelocity || false;
+    this.overrideYVelocityCheckbox.checked = this.config.overrideYVelocity || false;
+    this.overrideZVelocityCheckbox.checked = this.config.overrideZVelocity || false;
+    
+    // Set initial slider values
+    this.xVelocitySlider.value = this.config.xVelocity || 0;
+    this.yVelocitySlider.value = this.config.yVelocity || 0;
+    this.zVelocitySlider.value = this.config.zVelocity || 0;
+    
+    // Set text display values
+    this.xVelocityValue.textContent = this.config.xVelocity || 0;
+    this.yVelocityValue.textContent = this.config.yVelocity || 0;
+    this.zVelocityValue.textContent = this.config.zVelocity || 0;
+    
+    // Show/hide slider containers based on checkbox state
+    if (this.config.overrideXVelocity) {
+      this.xVelocitySliderContainer.classList.remove('hidden');
+    } else {
+      this.xVelocitySliderContainer.classList.add('hidden');
     }
     
-    if (activeSystem && activeSystem.velocityOverrides) {
-      // Set initial checkbox state
-      this.overrideXVelocityCheckbox.checked = activeSystem.velocityOverrides.overrideX;
-      this.overrideYVelocityCheckbox.checked = activeSystem.velocityOverrides.overrideY;
-      this.overrideZVelocityCheckbox.checked = activeSystem.velocityOverrides.overrideZ;
-      
-      // Set initial slider values
-      this.xVelocitySlider.value = activeSystem.velocityOverrides.xVelocity;
-      this.yVelocitySlider.value = activeSystem.velocityOverrides.yVelocity;
-      this.zVelocitySlider.value = activeSystem.velocityOverrides.zVelocity;
-      
-      // Set text display values
-      this.xVelocityValue.textContent = activeSystem.velocityOverrides.xVelocity;
-      this.yVelocityValue.textContent = activeSystem.velocityOverrides.yVelocity;
-      this.zVelocityValue.textContent = activeSystem.velocityOverrides.zVelocity;
-      
-      // Show/hide slider containers based on checkbox state
-      if (activeSystem.velocityOverrides.overrideX) {
-        this.xVelocitySliderContainer.classList.remove('hidden');
-      } else {
-        this.xVelocitySliderContainer.classList.add('hidden');
-      }
-      
-      if (activeSystem.velocityOverrides.overrideY) {
-        this.yVelocitySliderContainer.classList.remove('hidden');
-      } else {
-        this.yVelocitySliderContainer.classList.add('hidden');
-      }
-      
-      if (activeSystem.velocityOverrides.overrideZ) {
-        this.zVelocitySliderContainer.classList.remove('hidden');
-      } else {
-        this.zVelocitySliderContainer.classList.add('hidden');
-      }
+    if (this.config.overrideYVelocity) {
+      this.yVelocitySliderContainer.classList.remove('hidden');
     } else {
-      // If no active system or no getActiveSystem function, hide all velocity override controls
-      if (this.xVelocitySliderContainer) this.xVelocitySliderContainer.classList.add('hidden');
-      if (this.yVelocitySliderContainer) this.yVelocitySliderContainer.classList.add('hidden');
-      if (this.zVelocitySliderContainer) this.zVelocitySliderContainer.classList.add('hidden');
+      this.yVelocitySliderContainer.classList.add('hidden');
+    }
+    
+    if (this.config.overrideZVelocity) {
+      this.zVelocitySliderContainer.classList.remove('hidden');
+    } else {
+      this.zVelocitySliderContainer.classList.add('hidden');
     }
     
     // Initialize UI based on config values

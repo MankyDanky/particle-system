@@ -121,6 +121,14 @@ async function main() {
     particleSize: 0.5,
     particleSpeed: 1.0,
     
+    // Velocity override settings
+    overrideXVelocity: false,
+    overrideYVelocity: false,
+    overrideZVelocity: false,
+    xVelocity: 0,
+    yVelocity: 0,
+    zVelocity: 0,
+    
     // Appearance settings
     fadeEnabled: true,
     colorTransitionEnabled: false,

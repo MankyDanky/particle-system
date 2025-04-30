@@ -68,15 +68,13 @@ export class ParticleSystem {
       attractorPosition: [0.0, 0.0, 0.0]
     };
     
-    // Velocity override settings
-    this.velocityOverrides = {
-      overrideX: false,
-      overrideY: false,
-      overrideZ: false,
-      xVelocity: 0,
-      yVelocity: 0,
-      zVelocity: 0
-    };
+    // Initialize config velocity override properties if not set
+    if (config.overrideXVelocity === undefined) config.overrideXVelocity = false;
+    if (config.overrideYVelocity === undefined) config.overrideYVelocity = false;
+    if (config.overrideZVelocity === undefined) config.overrideZVelocity = false;
+    if (config.xVelocity === undefined) config.xVelocity = 0;
+    if (config.yVelocity === undefined) config.yVelocity = 0;
+    if (config.zVelocity === undefined) config.zVelocity = 0;
     
     // Fixed timestep physics system for consistent updates
     this.fixedDeltaTime = 1.0 / 60.0; // Consistent 60Hz physics updates
@@ -423,20 +421,20 @@ export class ParticleSystem {
     }
     
     // Store velocity vector (scaled by speed)
-    if (this.velocityOverrides.overrideX) {
-      this.particleVelocities[velIndex] = this.velocityOverrides.xVelocity;
+    if (this.config.overrideXVelocity) {
+      this.particleVelocities[velIndex] = this.config.xVelocity;
     } else {
       this.particleVelocities[velIndex] = dirX * this.config.particleSpeed;
     }
     
-    if (this.velocityOverrides.overrideY) {
-      this.particleVelocities[velIndex + 1] = this.velocityOverrides.yVelocity;
+    if (this.config.overrideYVelocity) {
+      this.particleVelocities[velIndex + 1] = this.config.yVelocity;
     } else {
       this.particleVelocities[velIndex + 1] = dirY * this.config.particleSpeed;
     }
     
-    if (this.velocityOverrides.overrideZ) {
-      this.particleVelocities[velIndex + 2] = this.velocityOverrides.zVelocity;
+    if (this.config.overrideZVelocity) {
+      this.particleVelocities[velIndex + 2] = this.config.zVelocity;
     } else {
       this.particleVelocities[velIndex + 2] = dirZ * this.config.particleSpeed;
     }
@@ -857,20 +855,20 @@ export class ParticleSystem {
     }
     
     // Store velocity vector
-    if (this.velocityOverrides.overrideX) {
-      this.particleVelocities[velIndex] = this.velocityOverrides.xVelocity;
+    if (this.config.overrideXVelocity) {
+      this.particleVelocities[velIndex] = this.config.xVelocity;
     } else {
       this.particleVelocities[velIndex] = dirX * this.config.particleSpeed;
     }
     
-    if (this.velocityOverrides.overrideY) {
-      this.particleVelocities[velIndex + 1] = this.velocityOverrides.yVelocity;
+    if (this.config.overrideYVelocity) {
+      this.particleVelocities[velIndex + 1] = this.config.yVelocity;
     } else {
       this.particleVelocities[velIndex + 1] = dirY * this.config.particleSpeed;
     }
     
-    if (this.velocityOverrides.overrideZ) {
-      this.particleVelocities[velIndex + 2] = this.velocityOverrides.zVelocity;
+    if (this.config.overrideZVelocity) {
+      this.particleVelocities[velIndex + 2] = this.config.zVelocity;
     } else {
       this.particleVelocities[velIndex + 2] = dirZ * this.config.particleSpeed;
     }
