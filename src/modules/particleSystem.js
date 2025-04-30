@@ -976,7 +976,7 @@ export class ParticleSystemManager {
     this.device = device;
     this.particleSystems = [];
     this.activeSystemIndex = 0;
-    this.systemCounter = 0;
+    this.systemCounter = 1;
   }
 
   createParticleSystem(config = {}) {
