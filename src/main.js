@@ -180,6 +180,24 @@ async function main() {
   // Create function to handle UI configuration updates when switching between systems
   let currentUI = null;
   
+  // Create separate quad buffers for each system
+  const systemQuadBuffers = {};
+  
+  function createQuadBufferForSystem(systemId, particleSize) {
+    const quadVertices = new Float32Array([
+      -particleSize, -particleSize, 0,
+      particleSize, -particleSize, 0,
+      particleSize, particleSize, 0,
+      -particleSize, particleSize, 0
+    ]);
+    
+    return createBuffer(
+      device, 
+      quadVertices, 
+      GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+    );
+  }
+  
   function onSystemSelected(index) {
     // Get the configuration of the selected system
     const selectedConfig = particleSystemManager.particleSystems[index].config;
@@ -215,9 +233,23 @@ async function main() {
     };
     
     selectedConfig.onSizeChange = (size) => {
-      // We still use a global quad vertex buffer for all systems as an optimization
-      // Only need to update it once for the active system
-      updateQuadGeometry(size);
+      // Update the quad buffer for this specific system only
+      const systemId = selectedConfig.id;
+      
+      // Create or update this system's quad buffer
+      if (!systemQuadBuffers[systemId]) {
+        systemQuadBuffers[systemId] = createQuadBufferForSystem(systemId, size);
+      } else {
+        // Update existing buffer with new size
+        const newQuadVertices = new Float32Array([
+          -size, -size, 0,
+          size, -size, 0,
+          size, size, 0,
+          -size, size, 0
+        ]);
+        
+        device.queue.writeBuffer(systemQuadBuffers[systemId], 0, newQuadVertices);
+      }
     };
     
     selectedConfig.onSpeedChange = () => {
@@ -273,6 +305,21 @@ async function main() {
   const bloomIntensityData = new Float32Array(16).fill(0);
   bloomIntensityData[0] = config.bloomIntensity;
   
+  // Initialize quad index buffer (shared across all systems)
+  const quadIndices = new Uint16Array([0, 1, 2, 0, 2, 3]);
+  const quadIndexBuffer = createBuffer(
+    device,
+    quadIndices,
+    GPUBufferUsage.INDEX
+  );
+  
+  // Create initial quad buffer for the first system
+  const firstSystemId = particleSystemManager.particleSystems[0].config.id;
+  systemQuadBuffers[firstSystemId] = createQuadBufferForSystem(
+    firstSystemId, 
+    config.particleSize
+  );
+  
   device.queue.writeBuffer(horizontalBlurUniformBuffer, 0, horizontalDirection);
   device.queue.writeBuffer(verticalBlurUniformBuffer, 0, verticalDirection);
   device.queue.writeBuffer(bloomIntensityBuffer, 0, bloomIntensityData);
@@ -296,32 +343,6 @@ async function main() {
   
   // Create depth texture
   let depthTexture = createDepthTexture(device, canvas.width, canvas.height);
-  
-  // Create quad geometry for billboards
-  const quadVertices = new Float32Array([
-    -config.particleSize, -config.particleSize, 0,
-    config.particleSize, -config.particleSize, 0,
-    config.particleSize, config.particleSize, 0,
-    -config.particleSize, config.particleSize, 0
-  ]);
-  
-  const quadIndices = new Uint16Array([
-    0, 1, 2,
-    2, 3, 0
-  ]);
-  
-  // Create vertex and index buffers
-  const quadVertexBuffer = createBuffer(
-    device, 
-    quadVertices, 
-    GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
-  );
-  
-  const quadIndexBuffer = createBuffer(
-    device, 
-    quadIndices, 
-    GPUBufferUsage.INDEX
-  );
   
   // Create bind groups
   const buffers = {
@@ -416,7 +437,6 @@ async function main() {
     // Render all non-bloom particles to scene texture
     const nonBloomPassEncoder = commandEncoder.beginRenderPass(nonBloomSceneRenderPassDescriptor);
     nonBloomPassEncoder.setPipeline(particlePipeline);
-    nonBloomPassEncoder.setVertexBuffer(0, quadVertexBuffer);
     nonBloomPassEncoder.setIndexBuffer(quadIndexBuffer, 'uint16');
     
     // Render each non-bloom particle system
@@ -437,6 +457,14 @@ async function main() {
         });
       }
       
+      // Use system-specific quad buffer
+      const systemId = system.config.id;
+      if (!systemQuadBuffers[systemId]) {
+        // Create quad buffer if it doesn't exist yet
+        systemQuadBuffers[systemId] = createQuadBufferForSystem(systemId, system.config.particleSize);
+      }
+      
+      nonBloomPassEncoder.setVertexBuffer(0, systemQuadBuffers[systemId]);
       nonBloomPassEncoder.setBindGroup(0, bindGroupCache.systemBindGroups[system.config.id]);
       nonBloomPassEncoder.setVertexBuffer(1, system.instanceBuffer);
       nonBloomPassEncoder.drawIndexed(6, system.activeParticles);
@@ -477,8 +505,16 @@ async function main() {
         
         const bloomSystemEncoder = commandEncoder.beginRenderPass(bloomSystemRenderPassDescriptor);
         bloomSystemEncoder.setPipeline(particlePipeline);
-        bloomSystemEncoder.setVertexBuffer(0, quadVertexBuffer);
         bloomSystemEncoder.setIndexBuffer(quadIndexBuffer, 'uint16');
+        
+        // Use system-specific quad buffer
+        const systemId = system.config.id;
+        if (!systemQuadBuffers[systemId]) {
+          // Create quad buffer if it doesn't exist yet
+          systemQuadBuffers[systemId] = createQuadBufferForSystem(systemId, system.config.particleSize);
+        }
+        
+        bloomSystemEncoder.setVertexBuffer(0, systemQuadBuffers[systemId]);
         
         // Create a system-specific bind group
         const systemBindGroup = device.createBindGroup({
@@ -751,18 +787,6 @@ async function main() {
     };
     
     requestAnimationFrame(waitForNextFrame);
-  }
-  
-  // Function to update quad geometry with new size
-  function updateQuadGeometry(size) {
-    const newQuadVertices = new Float32Array([
-      -size, -size, 0,
-      size, -size, 0,
-      size, size, 0,
-      -size, size, 0
-    ]);
-    
-    device.queue.writeBuffer(quadVertexBuffer, 0, newQuadVertices);
   }
   
   // Function to update appearance settings in the uniform buffer
