@@ -881,6 +881,28 @@ export class ParticleUI {
     if (this.onAttractorPositionZChange) {
       this.attractorPositionZSlider.removeEventListener('input', this.onAttractorPositionZChange);
     }
+    
+    // Add velocity override event listener removals
+    if (this.onOverrideXVelocityChange) {
+      this.overrideXVelocityCheckbox.removeEventListener('change', this.onOverrideXVelocityChange);
+    }
+    if (this.onOverrideYVelocityChange) {
+      this.overrideYVelocityCheckbox.removeEventListener('change', this.onOverrideYVelocityChange);
+    }
+    if (this.onOverrideZVelocityChange) {
+      this.overrideZVelocityCheckbox.removeEventListener('change', this.onOverrideZVelocityChange);
+    }
+    
+    // Also remove the velocity slider event listeners
+    if (this.onXVelocityChange) {
+      this.xVelocitySlider.removeEventListener('input', this.onXVelocityChange);
+    }
+    if (this.onYVelocityChange) {
+      this.yVelocitySlider.removeEventListener('input', this.onYVelocityChange);
+    }
+    if (this.onZVelocityChange) {
+      this.zVelocitySlider.removeEventListener('input', this.onZVelocityChange);
+    }
   }
 
   updateUIState() {
