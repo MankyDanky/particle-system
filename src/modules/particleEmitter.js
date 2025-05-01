@@ -19,6 +19,8 @@ export class ParticleEmitter {
       [posX, posY, posZ] = this.emitFromSquare();
     } else if (this.config.emissionShape === 'circle') {
       [posX, posY, posZ] = this.emitFromCircle();
+    } else if (this.config.emissionShape === 'cylinder') {
+      [posX, posY, posZ] = this.emitFromCylinder();
     } else {
       // Default to point emission at origin
       posX = 0;
@@ -249,6 +251,35 @@ export class ParticleEmitter {
     return [posX, posY, 0]; // Flat on XY plane
   }
 
+  emitFromCylinder() {
+    // Generate particles within a cylinder along the Y axis
+    const innerRadius = this.config.cylinderInnerRadius || 0;
+    const outerRadius = this.config.cylinderOuterRadius || 2.0;
+    const cylinderHeight = this.config.cylinderHeight || 4.0;
+    
+    // Generate angle around the cylinder circumference
+    const angle = Math.random() * Math.PI * 2; // 0 to 2π
+    
+    // Generate radius - similar to circle
+    let radius;
+    if (innerRadius > 0) {
+      // For hollow cylinder, interpolate between inner and outer
+      radius = innerRadius + (outerRadius - innerRadius) * Math.random();
+    } else {
+      // For solid cylinder, use square root for uniform area distribution
+      radius = outerRadius * Math.sqrt(Math.random());
+    }
+    
+    // Calculate XZ position (cylinder is aligned along Y axis)
+    const posX = Math.cos(angle) * radius;
+    const posZ = Math.sin(angle) * radius;
+    
+    // Random height within the cylinder
+    const posY = (Math.random() - 0.5) * cylinderHeight;
+    
+    return [posX, posY, posZ];
+  }
+
   calculateVelocity(posX, posY, posZ, velocities, velIndex) {
     // Create velocity direction
     const length = Math.sqrt(posX * posX + posY * posY + posZ * posZ);
@@ -262,7 +293,25 @@ export class ParticleEmitter {
         dirX = -posY / length;
         dirY = posX / length;
         dirZ = 0;
-      } else {
+      } 
+      // For cylinder with tangential velocity direction
+      else if (this.config.emissionShape === 'cylinder' && this.config.cylinderVelocityDirection === 'tangential') {
+        // For a cylinder aligned along Y-axis, tangent to the circular cross section
+        // We compute tangent to the XZ circle (Y is preserved)
+        const xzLength = Math.sqrt(posX * posX + posZ * posZ);
+        if (xzLength > 0.0001) {
+          dirX = -posZ / xzLength;
+          dirY = 0; // No Y component in the tangent (parallel to the cylinder axis)
+          dirZ = posX / xzLength;
+        } else {
+          // If on the axis, use random direction in XZ plane
+          const randomAngle = Math.random() * Math.PI * 2;
+          dirX = Math.cos(randomAngle);
+          dirY = 0;
+          dirZ = Math.sin(randomAngle);
+        }
+      }
+      else {
         // Default direction away from origin for all other shapes
         dirX = posX / length;
         dirY = posY / length;

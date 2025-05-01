@@ -233,6 +233,7 @@ export class ParticleUI {
     this.emissionShapeSelect = document.getElementById('emission-shape');
     this.cubeSettings = document.getElementById('cube-settings');
     this.sphereSettings = document.getElementById('sphere-settings');
+    this.cylinderSettings = document.getElementById('cylinder-settings');
     this.squareSettings = document.getElementById('square-settings');
     this.circleSettings = document.getElementById('circle-settings');
     
@@ -253,6 +254,15 @@ export class ParticleUI {
     this.innerRadiusValue = document.getElementById('inner-radius-value');
     this.outerRadiusSlider = document.getElementById('outer-radius-slider');
     this.outerRadiusValue = document.getElementById('outer-radius-value');
+    
+    // Cylinder settings
+    this.cylinderInnerRadiusSlider = document.getElementById('cylinder-inner-radius-slider');
+    this.cylinderInnerRadiusValue = document.getElementById('cylinder-inner-radius-value');
+    this.cylinderOuterRadiusSlider = document.getElementById('cylinder-outer-radius-slider');
+    this.cylinderOuterRadiusValue = document.getElementById('cylinder-outer-radius-value');
+    this.cylinderHeightSlider = document.getElementById('cylinder-height-slider');
+    this.cylinderHeightValue = document.getElementById('cylinder-height-value');
+    this.cylinderVelocityDirectionSelect = document.getElementById('cylinder-velocity-direction');
     
     // 2D shape settings
     this.squareSizeSlider = document.getElementById('square-size-slider');
@@ -561,21 +571,31 @@ export class ParticleUI {
       if (this.config.emissionShape === 'cube') {
         this.cubeSettings.classList.remove('hidden');
         this.sphereSettings.classList.add('hidden');
+        this.cylinderSettings.classList.add('hidden');
         this.squareSettings.classList.add('hidden');
         this.circleSettings.classList.add('hidden');
       } else if (this.config.emissionShape === 'sphere') {
         this.cubeSettings.classList.add('hidden');
         this.sphereSettings.classList.remove('hidden');
+        this.cylinderSettings.classList.add('hidden');
+        this.squareSettings.classList.add('hidden');
+        this.circleSettings.classList.add('hidden');
+      } else if (this.config.emissionShape === 'cylinder') {
+        this.cubeSettings.classList.add('hidden');
+        this.sphereSettings.classList.add('hidden');
+        this.cylinderSettings.classList.remove('hidden');
         this.squareSettings.classList.add('hidden');
         this.circleSettings.classList.add('hidden');
       } else if (this.config.emissionShape === 'square') {
         this.cubeSettings.classList.add('hidden');
         this.sphereSettings.classList.add('hidden');
+        this.cylinderSettings.classList.add('hidden');
         this.squareSettings.classList.remove('hidden');
         this.circleSettings.classList.add('hidden');
       } else if (this.config.emissionShape === 'circle') {
         this.cubeSettings.classList.add('hidden');
         this.sphereSettings.classList.add('hidden');
+        this.cylinderSettings.classList.add('hidden');
         this.squareSettings.classList.add('hidden');
         this.circleSettings.classList.remove('hidden');
       }
@@ -815,6 +835,50 @@ export class ParticleUI {
     // Circle velocity direction dropdown
     this.circleVelocityDirectionSelect.addEventListener('change', this.onCircleVelocityDirectionChange = () => {
       this.config.circleVelocityDirection = this.circleVelocityDirectionSelect.value;
+      
+      if (this.config.onRespawn) {
+        this.config.onRespawn();
+      }
+    });
+    
+    // Cylinder inner radius slider
+    this.cylinderInnerRadiusSlider.addEventListener('input', this.onCylinderInnerRadiusChange = () => {
+      const value = this.cylinderInnerRadiusSlider.value;
+      this.cylinderInnerRadiusValue.textContent = value;
+      this.config.cylinderInnerRadius = parseFloat(value);
+      
+      // Make sure inner radius is less than outer radius
+      if (this.config.cylinderInnerRadius >= this.config.cylinderOuterRadius) {
+        this.cylinderOuterRadiusSlider.value = this.config.cylinderInnerRadius + 0.1;
+        this.cylinderOuterRadiusValue.textContent = this.cylinderOuterRadiusSlider.value;
+        this.config.cylinderOuterRadius = parseFloat(this.cylinderOuterRadiusSlider.value);
+      }
+    });
+    
+    // Cylinder outer radius slider
+    this.cylinderOuterRadiusSlider.addEventListener('input', this.onCylinderOuterRadiusChange = () => {
+      const value = this.cylinderOuterRadiusSlider.value;
+      this.cylinderOuterRadiusValue.textContent = value;
+      this.config.cylinderOuterRadius = parseFloat(value);
+      
+      // Make sure outer radius is greater than inner radius
+      if (this.config.cylinderOuterRadius <= this.config.cylinderInnerRadius) {
+        this.cylinderInnerRadiusSlider.value = this.config.cylinderOuterRadius - 0.1;
+        this.cylinderInnerRadiusValue.textContent = this.cylinderInnerRadiusSlider.value;
+        this.config.cylinderInnerRadius = parseFloat(this.cylinderInnerRadiusSlider.value);
+      }
+    });
+    
+    // Cylinder height slider
+    this.cylinderHeightSlider.addEventListener('input', this.onCylinderHeightChange = () => {
+      const value = this.cylinderHeightSlider.value;
+      this.cylinderHeightValue.textContent = value;
+      this.config.cylinderHeight = parseFloat(value);
+    });
+    
+    // Cylinder velocity direction dropdown
+    this.cylinderVelocityDirectionSelect.addEventListener('change', this.onCylinderVelocityDirectionChange = () => {
+      this.config.cylinderVelocityDirection = this.cylinderVelocityDirectionSelect.value;
       
       if (this.config.onRespawn) {
         this.config.onRespawn();
@@ -1160,6 +1224,20 @@ export class ParticleUI {
       this.circleVelocityDirectionSelect.removeEventListener('change', this.onCircleVelocityDirectionChange);
     }
     
+    // Cylinder controls
+    if (this.onCylinderInnerRadiusChange) {
+      this.cylinderInnerRadiusSlider.removeEventListener('input', this.onCylinderInnerRadiusChange);
+    }
+    if (this.onCylinderOuterRadiusChange) {
+      this.cylinderOuterRadiusSlider.removeEventListener('input', this.onCylinderOuterRadiusChange);
+    }
+    if (this.onCylinderHeightChange) {
+      this.cylinderHeightSlider.removeEventListener('input', this.onCylinderHeightChange);
+    }
+    if (this.onCylinderVelocityDirectionChange) {
+      this.cylinderVelocityDirectionSelect.removeEventListener('change', this.onCylinderVelocityDirectionChange);
+    }
+    
     // Shape rotation sliders
     if (this.onShapeRotationXChange) {
       this.shapeRotationXSlider.removeEventListener('input', this.onShapeRotationXChange);
@@ -1330,21 +1408,31 @@ export class ParticleUI {
     if (this.config.emissionShape === 'cube') {
       this.cubeSettings.classList.remove('hidden');
       this.sphereSettings.classList.add('hidden');
+      this.cylinderSettings.classList.add('hidden');
       this.squareSettings.classList.add('hidden');
       this.circleSettings.classList.add('hidden');
     } else if (this.config.emissionShape === 'sphere') {
       this.cubeSettings.classList.add('hidden');
       this.sphereSettings.classList.remove('hidden');
+      this.cylinderSettings.classList.add('hidden');
+      this.squareSettings.classList.add('hidden');
+      this.circleSettings.classList.add('hidden');
+    } else if (this.config.emissionShape === 'cylinder') {
+      this.cubeSettings.classList.add('hidden');
+      this.sphereSettings.classList.add('hidden');
+      this.cylinderSettings.classList.remove('hidden');
       this.squareSettings.classList.add('hidden');
       this.circleSettings.classList.add('hidden');
     } else if (this.config.emissionShape === 'square') {
       this.cubeSettings.classList.add('hidden');
       this.sphereSettings.classList.add('hidden');
+      this.cylinderSettings.classList.add('hidden');
       this.squareSettings.classList.remove('hidden');
       this.circleSettings.classList.add('hidden');
     } else if (this.config.emissionShape === 'circle') {
       this.cubeSettings.classList.add('hidden');
       this.sphereSettings.classList.add('hidden');
+      this.cylinderSettings.classList.add('hidden');
       this.squareSettings.classList.add('hidden');
       this.circleSettings.classList.remove('hidden');
     }
@@ -1401,6 +1489,15 @@ export class ParticleUI {
     
     // Initialize circle velocity direction dropdown
     this.circleVelocityDirectionSelect.value = this.config.circleVelocityDirection || 'away';
+    
+    // Initialize cylinder settings
+    this.cylinderInnerRadiusSlider.value = this.config.cylinderInnerRadius || 0;
+    this.cylinderInnerRadiusValue.textContent = this.config.cylinderInnerRadius || 0;
+    this.cylinderOuterRadiusSlider.value = this.config.cylinderOuterRadius || 2;
+    this.cylinderOuterRadiusValue.textContent = this.config.cylinderOuterRadius || 2;
+    this.cylinderHeightSlider.value = this.config.cylinderHeight || 4;
+    this.cylinderHeightValue.textContent = this.config.cylinderHeight || 4;
+    this.cylinderVelocityDirectionSelect.value = this.config.cylinderVelocityDirection || 'away';
     
     // Initialize shape rotation sliders
     this.shapeRotationXSlider.value = this.config.shapeRotationX || 0;

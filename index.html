@@ -60,6 +60,7 @@
         <select id="emission-shape">
           <option value="cube">Cube</option>
           <option value="sphere">Sphere</option>
+          <option value="cylinder">Cylinder</option>
           <option value="square">Square (2D)</option>
           <option value="circle">Circle (2D)</option>
         </select>
@@ -88,6 +89,31 @@
           <label for="outer-radius-slider">Outer Radius:</label>
           <input type="range" id="outer-radius-slider" min="0.5" max="5" value="2" step="0.1">
           <span id="outer-radius-value">2</span>
+        </div>
+      </div>
+      
+      <div id="cylinder-settings" class="shape-settings hidden">
+        <div class="slider-container">
+          <label for="cylinder-inner-radius-slider">Inner Radius:</label>
+          <input type="range" id="cylinder-inner-radius-slider" min="0" max="2" value="0" step="0.1">
+          <span id="cylinder-inner-radius-value">0</span>
+        </div>
+        <div class="slider-container">
+          <label for="cylinder-outer-radius-slider">Outer Radius:</label>
+          <input type="range" id="cylinder-outer-radius-slider" min="0.5" max="5" value="2" step="0.1">
+          <span id="cylinder-outer-radius-value">2</span>
+        </div>
+        <div class="slider-container">
+          <label for="cylinder-height-slider">Height:</label>
+          <input type="range" id="cylinder-height-slider" min="0.5" max="10" value="4" step="0.1">
+          <span id="cylinder-height-value">4</span>
+        </div>
+        <div class="dropdown-container">
+          <label for="cylinder-velocity-direction">Velocity Direction:</label>
+          <select id="cylinder-velocity-direction">
+            <option value="away">Away from Origin</option>
+            <option value="tangential">Tangential</option>
+          </select>
         </div>
       </div>
       
