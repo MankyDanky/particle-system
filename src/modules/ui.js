@@ -273,11 +273,15 @@ export class ParticleUI {
     this.textureUploadContainer = document.getElementById('texture-upload-container');
     this.textureFileInput = document.getElementById('texture-file-input');
     this.currentTextureDisplay = document.getElementById('current-texture-display');
+    this.removeTextureButton = document.getElementById('remove-texture-button');
   }
 
   setupEventListeners() {
     // Remove existing event listeners
     this.removeAllEventListeners();
+    
+    // Initialize lastUploadedTextureUrl if not already set
+    this.lastUploadedTextureUrl = this.lastUploadedTextureUrl || null;
     
     // Lifetime slider
     this.lifetimeSlider.addEventListener('input', this.onLifetimeChange = () => {
@@ -839,31 +843,55 @@ export class ParticleUI {
           // Create an image element to load the texture
           const img = new Image();
           img.onload = async () => {
-            // Create an ImageBitmap which WebGPU can use
-            const imageBitmap = await createImageBitmap(img);
-            
-            // Display a thumbnail of the texture
-            this.currentTextureDisplay.innerHTML = '';
-            const thumbnail = document.createElement('img');
-            thumbnail.src = fileUrl;
-            thumbnail.style.maxWidth = '100%';
-            thumbnail.style.maxHeight = '100%';
-            this.currentTextureDisplay.appendChild(thumbnail);
-            
-            // Enable texture in the config
-            this.config.textureEnabled = true;
-            this.textureCheckbox.checked = true;
-            this.textureUploadContainer.classList.remove('hidden');
-            
-            // Set the texture on the active particle system
-            const activeSystem = this.config.getActiveSystem?.();
-            if (activeSystem && activeSystem.setTexture) {
-              await activeSystem.setTexture(imageBitmap);
-            }
-            
-            // Update appearance uniforms
-            if (this.config.onAppearanceChange) {
-              this.config.onAppearanceChange();
+            try {
+              // Create an ImageBitmap which WebGPU can use
+              const imageBitmap = await createImageBitmap(img);
+              
+              // Update the texture display
+              this.currentTextureDisplay.innerHTML = '';
+              const thumbnailImg = document.createElement('img');
+              thumbnailImg.src = fileUrl;
+              thumbnailImg.style.width = '100%';
+              thumbnailImg.style.height = '100%';
+              thumbnailImg.style.objectFit = 'contain';
+              this.currentTextureDisplay.appendChild(thumbnailImg);
+              
+              // Show the remove button
+              this.removeTextureButton.classList.remove('hidden');
+              
+              // Enable texture in the config
+              this.config.textureEnabled = true;
+              this.textureCheckbox.checked = true;
+              this.textureUploadContainer.classList.remove('hidden');
+              
+              // Store the texture URL in the config for this specific system
+              this.lastUploadedTextureUrl = fileUrl;
+              if (!this.config.textureUrls) {
+                this.config.textureUrls = {};
+              }
+              const activeSystem = this.config.getActiveSystem?.();
+              if (activeSystem) {
+                const systemId = this.config.id;
+                this.config.textureUrls[systemId] = fileUrl;
+              }
+              
+              // Set the texture on the active particle system
+              if (activeSystem && activeSystem.setTexture) {
+                await activeSystem.setTexture(imageBitmap);
+                
+                // Force a complete buffer update to ensure vertex buffers are properly set
+                if (activeSystem.updateBuffers) {
+                  activeSystem.updateBuffers();
+                }
+              }
+              
+              // Update appearance uniforms
+              if (this.config.onAppearanceChange) {
+                this.config.onAppearanceChange();
+              }
+            } catch (error) {
+              console.error('Error processing texture:', error);
+              alert('Failed to process texture. Please try a different image.');
             }
           };
           img.src = fileUrl;
@@ -871,6 +899,13 @@ export class ParticleUI {
           console.error('Error loading texture:', error);
           alert('Failed to load texture. Please try a different image.');
         }
+      });
+    }
+    
+    // Set up remove texture button
+    if (this.removeTextureButton) {
+      this.removeTextureButton.addEventListener('click', this.onRemoveTextureClick = () => {
+        this.removeTexture();
       });
     }
     
@@ -1062,6 +1097,9 @@ export class ParticleUI {
     }
     if (this.onTextureFileChange) {
       this.textureFileInput.removeEventListener('change', this.onTextureFileChange);
+    }
+    if (this.onRemoveTextureClick) {
+      this.removeTextureButton.removeEventListener('click', this.onRemoveTextureClick);
     }
     
     // Rotation controls event listeners
@@ -1279,10 +1317,35 @@ export class ParticleUI {
       
       // If there's a current texture, update the display
       const activeSystem = this.config.getActiveSystem?.();
-      if (activeSystem && activeSystem.particleTexture && activeSystem.particleTexture.label !== "defaultParticleTexture") {
-        this.currentTextureDisplay.innerHTML = '<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background-color:#888">Texture</div>';
+      if (activeSystem && activeSystem.particleTexture) {
+        if (activeSystem.particleTexture.label !== "defaultParticleTexture") {
+          // Check if we have a stored URL for this system
+          const systemId = this.config.id;
+          if (this.config.textureUrls && this.config.textureUrls[systemId]) {
+            this.lastUploadedTextureUrl = this.config.textureUrls[systemId];
+            
+            // Show the texture in the preview area
+            this.currentTextureDisplay.innerHTML = '';
+            const img = document.createElement('img');
+            img.src = this.lastUploadedTextureUrl;
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'contain';
+            this.currentTextureDisplay.appendChild(img);
+            
+            // Show the remove button
+            this.removeTextureButton.classList.remove('hidden');
+          } else {
+            this.currentTextureDisplay.innerHTML = 'None';
+            this.removeTextureButton.classList.add('hidden');
+          }
+        } else {
+          this.currentTextureDisplay.innerHTML = 'None';
+          this.removeTextureButton.classList.add('hidden');
+        }
       } else {
         this.currentTextureDisplay.innerHTML = 'None';
+        this.removeTextureButton.classList.add('hidden');
       }
     }
     
@@ -1299,6 +1362,98 @@ export class ParticleUI {
     const b = Math.round(rgb[2] * 255).toString(16).padStart(2, '0');
     
     return `#${r}${g}${b}`;
+  }
+
+  // Helper method to display a texture preview when switching systems
+  displayTexturePreview(texture) {
+    // Clear previous content
+    this.currentTextureDisplay.innerHTML = '';
+    
+    // Create a container for the texture and remove button
+    const container = document.createElement('div');
+    container.className = 'texture-thumbnail-container';
+    
+    // Create a thumbnail to show the texture
+    const thumbnail = document.createElement('div');
+    thumbnail.className = 'texture-thumbnail';
+    
+    // Get the active system to access its texture
+    const activeSystem = this.config.getActiveSystem?.();
+    if (activeSystem && activeSystem.particleTexture) {
+      // Store the texture URL if it was uploaded by the user
+      if (this.lastUploadedTextureUrl) {
+        // If we have a saved URL from the last upload, use it
+        const img = document.createElement('img');
+        img.src = this.lastUploadedTextureUrl;
+        thumbnail.appendChild(img);
+      }
+    }
+    
+    // Add a remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = 'Remove Texture';
+    removeBtn.className = 'button small-button texture-remove-button';
+    removeBtn.addEventListener('click', () => this.removeTexture());
+    
+    container.appendChild(thumbnail);
+    container.appendChild(removeBtn);
+    
+    this.currentTextureDisplay.appendChild(container);
+  }
+  
+  // Method to remove texture from the current system
+  removeTexture() {
+    const activeSystem = this.config.getActiveSystem?.();
+    if (activeSystem) {
+      // Use the dedicated method to reset texture
+      activeSystem.resetTexture();
+      
+      // Update UI
+      this.currentTextureDisplay.innerHTML = 'None';
+      
+      // Update config
+      this.config.textureEnabled = false;
+      
+      // Remove the stored texture URL for this system
+      if (this.config.textureUrls && this.config.id) {
+        delete this.config.textureUrls[this.config.id];
+      }
+      
+      // Clear the last uploaded texture URL
+      this.lastUploadedTextureUrl = null;
+      
+      // Reset the file input element to clear the filename
+      if (this.textureFileInput) {
+        // Create a new file input element to replace the old one
+        const newFileInput = document.createElement('input');
+        newFileInput.type = 'file';
+        newFileInput.id = 'texture-file-input';
+        newFileInput.accept = 'image/*';
+        
+        // Replace the old input with the new one
+        const parentElement = this.textureFileInput.parentElement;
+        if (parentElement) {
+          parentElement.replaceChild(newFileInput, this.textureFileInput);
+          
+          // Update the reference to the new input
+          this.textureFileInput = newFileInput;
+          
+          // Reattach the event listener to the new element
+          this.textureFileInput.addEventListener('change', this.onTextureFileChange);
+        }
+      }
+      
+      // Make sure checkbox is unchecked but keep the container visible
+      this.textureCheckbox.checked = false;
+      
+      // Hide remove button 
+      this.removeTextureButton.classList.add('hidden');
+      
+      // Call appearance change to update rendering if needed
+      if (this.config.onAppearanceChange) {
+        this.config.onAppearanceChange();
+      }
+    }
   }
 }
 

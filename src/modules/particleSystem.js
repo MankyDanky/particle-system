@@ -143,8 +143,29 @@ export class ParticleSystem {
     
     // Update appearance uniform to reflect the texture being enabled
     this.updateAppearanceUniform();
+    
+    // Update instance buffer to ensure vertex data is properly set before rendering
+    this.updateBuffers();
   }
   
+  // Method to reset to default texture
+  resetTexture() {
+    // Clean up previous texture if it exists and isn't already the default
+    if (this.particleTexture && this.particleTexture.label !== "defaultParticleTexture") {
+      this.particleTexture.destroy();
+    }
+    
+    // Create a new default texture
+    this.createDefaultTexture();
+    
+    // Update config and appearance uniform
+    this.config.textureEnabled = false;
+    this.updateAppearanceUniform();
+    
+    // Ensure buffers are updated
+    this.updateBuffers();
+  }
+
   updateAppearanceUniform() {
     const appearanceData = new Float32Array([
       this.config.fadeEnabled ? 1.0 : 0.0,
