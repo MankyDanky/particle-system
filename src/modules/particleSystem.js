@@ -2,6 +2,10 @@
  * Particle system core functionality
  */
 
+import { ParticleEmitter } from './particleEmitter.js';
+import { ParticlePhysics } from './particlePhysics.js';
+import { ParticleTextureManager } from './particleTextures.js';
+
 export class ParticleSystem {
   constructor(device, config) {
     this.device = device;
@@ -32,13 +36,6 @@ export class ParticleSystem {
       label: "particleVelocityBuffer"
     });
     
-    // Create physics uniform buffer
-    this.physicsUniformBuffer = device.createBuffer({
-      size: 48, // 12 float32 values (48 bytes)
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-      label: "physicsUniformBuffer"
-    });
-    
     // Create appearance uniform buffer for this specific particle system
     this.appearanceUniformBuffer = device.createBuffer({
       size: 96, // [fadeEnabled, colorTransitionEnabled, particleSize, textureEnabled, colors...] + rotation values
@@ -53,24 +50,6 @@ export class ParticleSystem {
       label: "systemBloomIntensityBuffer"
     });
     
-    // Create default texture
-    this.createDefaultTexture();
-    
-    // Initialize bloom intensity buffer with this system's bloom intensity
-    this.updateBloomIntensity();
-    
-    // Initialize appearance uniform buffer with this system's settings
-    this.updateAppearanceUniform();
-    
-    // Set default physics values
-    this.physicsSettings = {
-      deltaTime: 0.016,
-      gravity: 0.0,
-      turbulence: 0.0,
-      attractorStrength: 0.0,
-      attractorPosition: [0.0, 0.0, 0.0]
-    };
-    
     // Initialize config velocity override properties if not set
     if (config.overrideXVelocity === undefined) config.overrideXVelocity = false;
     if (config.overrideYVelocity === undefined) config.overrideYVelocity = false;
@@ -80,63 +59,38 @@ export class ParticleSystem {
     if (config.zVelocity === undefined) config.zVelocity = 0;
     if (config.textureEnabled === undefined) config.textureEnabled = false;
     
-    // Fixed timestep physics system for consistent updates
-    this.fixedDeltaTime = 1.0 / 60.0; // Consistent 60Hz physics updates
-    this.physicsClock = 0;
-    this.physicsAccumulator = 0;
+    // Initialize the modular components
+    this.emitter = new ParticleEmitter(config);
+    this.physics = new ParticlePhysics(device);
+    this.textureManager = new ParticleTextureManager(device);
+    
+    // Set the current texture to the default
+    this.particleTexture = this.textureManager.getDefaultTexture();
+    
+    // Initialize bloom intensity buffer with this system's bloom intensity
+    this.updateBloomIntensity();
+    
+    // Initialize appearance uniform buffer with this system's settings
+    this.updateAppearanceUniform();
     
     // Initialize the frame counter for readback scheduling
     this.frameCount = 0;
     this.shouldReset = false;
-    this.computeReady = false;
     
-    // Minimum update frequency
-    this.minUpdatesPerSecond = 30;
-    this.lastUpdateTime = 0;
-    
-    // Create compute pipeline and bind group layout
+    // Initialize compute pipeline
     this.initComputePipeline(device);
   }
 
-  createDefaultTexture() {
-    // Create a 1x1 white texture as the default
-    const data = new Uint8Array([255, 255, 255, 255]);
-    
-    this.particleTexture = this.device.createTexture({
-      size: [1, 1],
-      format: 'rgba8unorm',
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-      label: "defaultParticleTexture"
-    });
-
-    this.device.queue.writeTexture(
-      { texture: this.particleTexture },
-      data,
-      { bytesPerRow: 4 },
-      [1, 1]
-    );
+  async initComputePipeline(device) {
+    this.computeReady = await this.physics.initComputePipeline(this.instanceBuffer, this.velocityBuffer);
   }
-  
-  // New method to load a texture from an ImageBitmap
+
   async setTexture(imageBitmap) {
     // Clean up previous texture if it exists and isn't the default
-    if (this.particleTexture && this.particleTexture.label !== "defaultParticleTexture") {
-      this.particleTexture.destroy();
-    }
+    this.textureManager.destroyTexture(this.particleTexture);
     
     // Create texture from the image
-    this.particleTexture = this.device.createTexture({
-      size: [imageBitmap.width, imageBitmap.height],
-      format: 'rgba8unorm',
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-      label: "particleTexture"
-    });
-    
-    this.device.queue.copyExternalImageToTexture(
-      { source: imageBitmap },
-      { texture: this.particleTexture },
-      [imageBitmap.width, imageBitmap.height]
-    );
+    this.particleTexture = await this.textureManager.loadTexture(imageBitmap);
     
     // Enable texturing in the config
     this.config.textureEnabled = true;
@@ -148,15 +102,12 @@ export class ParticleSystem {
     this.updateBuffers();
   }
   
-  // Method to reset to default texture
   resetTexture() {
     // Clean up previous texture if it exists and isn't already the default
-    if (this.particleTexture && this.particleTexture.label !== "defaultParticleTexture") {
-      this.particleTexture.destroy();
-    }
+    this.textureManager.destroyTexture(this.particleTexture);
     
-    // Create a new default texture
-    this.createDefaultTexture();
+    // Set to default texture
+    this.particleTexture = this.textureManager.getDefaultTexture();
     
     // Update config and appearance uniform
     this.config.textureEnabled = false;
@@ -192,72 +143,6 @@ export class ParticleSystem {
     const bloomIntensityData = new Float32Array(16).fill(0);
     bloomIntensityData[0] = this.config.bloomIntensity || 1.0;
     this.device.queue.writeBuffer(this.bloomIntensityBuffer, 0, bloomIntensityData);
-  }
-
-  async initComputePipeline(device) {
-    try {
-      await this.createComputePipeline(device);
-      this.computeReady = true;
-    } catch (error) {
-      console.error("Error initializing compute pipeline:", error);
-    }
-  }
-  
-  async createComputePipeline(device) {
-    const { particlePhysicsShader } = await import('./shaders.js');
-    
-    // Create bind group layout for compute shader
-    this.computeBindGroupLayout = device.createBindGroupLayout({
-      entries: [
-        {
-          binding: 0,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: { type: 'uniform' }
-        },
-        {
-          binding: 1,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: { type: 'storage' }
-        },
-        {
-          binding: 2,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: { type: 'storage' }
-        }
-      ]
-    });
-    
-    // Create compute pipeline
-    this.computePipeline = device.createComputePipeline({
-      layout: device.createPipelineLayout({
-        bindGroupLayouts: [this.computeBindGroupLayout]
-      }),
-      compute: {
-        module: device.createShaderModule({
-          code: particlePhysicsShader
-        }),
-        entryPoint: 'main'
-      }
-    });
-    
-    // Create compute bind group
-    this.computeBindGroup = device.createBindGroup({
-      layout: this.computeBindGroupLayout,
-      entries: [
-        {
-          binding: 0,
-          resource: { buffer: this.physicsUniformBuffer }
-        },
-        {
-          binding: 1,
-          resource: { buffer: this.instanceBuffer }
-        },
-        {
-          binding: 2,
-          resource: { buffer: this.velocityBuffer }
-        }
-      ]
-    });
   }
 
   spawnParticles() {
@@ -323,225 +208,8 @@ export class ParticleSystem {
   emitParticle() {
     if (this.activeParticles >= this.particleCount) return false;
     
-    const index = this.activeParticles * 8;
-    let posX, posY, posZ;
-    
-    if (this.config.emissionShape === 'cube') {
-      // Generate random position within a cube shell
-      let innerLength = this.config.innerLength || 0;
-      let outerLength = this.config.outerLength || this.config.cubeLength;
-      
-      if (innerLength > 0) {
-        // Generate position in a cube shell (between inner and outer length)
-        // First get random position on a unit cube (-0.5 to 0.5)
-        const sides = Math.floor(Math.random() * 6); // Choose one of 6 cube faces
-        const u = Math.random() - 0.5; // -0.5 to 0.5
-        const v = Math.random() - 0.5; // -0.5 to 0.5
-        
-        // Generate points on the selected face of a unit cube
-        switch(sides) {
-          case 0: // Front face (z = 0.5)
-            posX = u;
-            posY = v;
-            posZ = 0.5;
-            break;
-          case 1: // Back face (z = -0.5)
-            posX = u;
-            posY = v;
-            posZ = -0.5;
-            break;
-          case 2: // Right face (x = 0.5)
-            posX = 0.5;
-            posY = u;
-            posZ = v;
-            break;
-          case 3: // Left face (x = -0.5)
-            posX = -0.5;
-            posY = u;
-            posZ = v;
-            break;
-          case 4: // Top face (y = 0.5)
-            posX = u;
-            posY = 0.5;
-            posZ = v;
-            break;
-          case 5: // Bottom face (y = -0.5)
-            posX = u;
-            posY = -0.5;
-            posZ = v;
-            break;
-        }
-        
-        // Interpolate between inner and outer length
-        const t = Math.random();
-        const length = innerLength + t * (outerLength - innerLength);
-        
-        // Scale unit cube points to the shell size
-        posX *= length;
-        posY *= length;
-        posZ *= length;
-      } else {
-        // Original solid cube generation using outer length
-        posX = (Math.random() - 0.5) * outerLength;
-        posY = (Math.random() - 0.5) * outerLength;
-        posZ = (Math.random() - 0.5) * outerLength;
-      }
-    } else if (this.config.emissionShape === 'sphere') {
-      // Generate random position within a sphere shell
-      let theta = Math.random() * 2 * Math.PI; // azimuthal angle
-      let phi = Math.acos(2 * Math.random() - 1); // polar angle
-      
-      // Calculate direction vector
-      let dirX = Math.sin(phi) * Math.cos(theta);
-      let dirY = Math.sin(phi) * Math.sin(theta);
-      let dirZ = Math.cos(phi);
-      
-      // Generate random radius between inner and outer
-      let radius;
-      if (this.config.innerRadius === 0) {
-        // For solid sphere, use cubic distribution for uniform volume distribution
-        radius = this.config.outerRadius * Math.cbrt(Math.random());
-      } else {
-        // For shell, interpolate between inner and outer
-        radius = this.config.innerRadius + (this.config.outerRadius - this.config.innerRadius) * Math.random();
-      }
-      
-      // Calculate position
-      posX = dirX * radius;
-      posY = dirY * radius;
-      posZ = dirZ * radius;
-    } else if (this.config.emissionShape === 'square') {
-      // Generate particles in a 2D square along the XY plane (Z=0)
-      const innerSize = this.config.squareInnerSize || 0;
-      const outerSize = this.config.squareSize || 2.0;
-      
-      if (innerSize > 0) {
-        // Generate position on the perimeter of a square (between inner and outer)
-        // Choose which side to place particle on
-        const side = Math.floor(Math.random() * 4);
-        let size = innerSize + (outerSize - innerSize) * Math.random();
-        
-        switch(side) {
-          case 0: // Top side
-            posX = (Math.random() * 2 - 1) * size; // -size to size
-            posY = size;
-            break;
-          case 1: // Right side
-            posX = size;
-            posY = (Math.random() * 2 - 1) * size; // -size to size
-            break;
-          case 2: // Bottom side
-            posX = (Math.random() * 2 - 1) * size; // -size to size
-            posY = -size;
-            break;
-          case 3: // Left side
-            posX = -size;
-            posY = (Math.random() * 2 - 1) * size; // -size to size
-            break;
-        }
-        posZ = 0; // Flat on XY plane
-      } else {
-        // Generate in a solid square
-        posX = (Math.random() * 2 - 1) * outerSize; // -outerSize to outerSize
-        posY = (Math.random() * 2 - 1) * outerSize; // -outerSize to outerSize
-        posZ = 0; // Flat on XY plane
-      }
-    } else if (this.config.emissionShape === 'circle') {
-      // Generate particles in a 2D circle along the XY plane (Z=0)
-      const innerRadius = this.config.circleInnerRadius || 0;
-      const outerRadius = this.config.circleOuterRadius || 2.0;
-      
-      // Generate angle around the circle
-      const angle = Math.random() * Math.PI * 2; // 0 to 2π
-      
-      // Generate radius
-      let radius;
-      if (innerRadius > 0) {
-        // For ring, interpolate between inner and outer
-        radius = innerRadius + (outerRadius - innerRadius) * Math.random();
-      } else {
-        // For solid circle, use square root for uniform area distribution
-        radius = outerRadius * Math.sqrt(Math.random());
-      }
-      
-      // Calculate position
-      posX = Math.cos(angle) * radius;
-      posY = Math.sin(angle) * radius;
-      posZ = 0; // Flat on XY plane
-    }
-    
-    // Store the position
-    const particleIndex = this.activeParticles * 8;
-    this.particleData[particleIndex] = posX;
-    this.particleData[particleIndex + 1] = posY;
-    this.particleData[particleIndex + 2] = posZ;
-    
-    // Create velocity direction
-    const velIndex = this.activeParticles * 4;
-    
-    // First try: Use position to create an outward direction from origin
-    const length = Math.sqrt(posX * posX + posY * posY + posZ * posZ);
-    let dirX, dirY, dirZ;
-    
-    if (length > 0.0001) {
-      // For circle shape with tangential velocity direction
-      if (this.config.emissionShape === 'circle' && this.config.circleVelocityDirection === 'tangential') {
-        // Create a tangential direction vector (perpendicular to radius vector)
-        // For 2D circle in XY plane, tangent vector is (-y, x, 0)
-        dirX = -posY / length;
-        dirY = posX / length;
-        dirZ = 0;
-      } else {
-        // Default direction away from origin for all other shapes
-        dirX = posX / length;
-        dirY = posY / length;
-        dirZ = posZ / length;
-      }
-    } else {
-      // If particle is at origin, create a random direction
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      dirX = Math.sin(phi) * Math.cos(theta);
-      dirY = Math.sin(phi) * Math.sin(theta);
-      dirZ = Math.cos(phi);
-    }
-    
-    // Store velocity vector (scaled by speed)
-    if (this.config.overrideXVelocity) {
-      this.particleVelocities[velIndex] = this.config.xVelocity;
-    } else {
-      this.particleVelocities[velIndex] = dirX * this.config.particleSpeed;
-    }
-    
-    if (this.config.overrideYVelocity) {
-      this.particleVelocities[velIndex + 1] = this.config.yVelocity;
-    } else {
-      this.particleVelocities[velIndex + 1] = dirY * this.config.particleSpeed;
-    }
-    
-    if (this.config.overrideZVelocity) {
-      this.particleVelocities[velIndex + 2] = this.config.zVelocity;
-    } else {
-      this.particleVelocities[velIndex + 2] = dirZ * this.config.particleSpeed;
-    }
-    
-    this.particleVelocities[velIndex + 3] = 0; // padding
-    
-    // Color
-    if (this.config.colorTransitionEnabled) {
-      this.particleData[particleIndex + 3] = this.config.startColor[0];
-      this.particleData[particleIndex + 4] = this.config.startColor[1];
-      this.particleData[particleIndex + 5] = this.config.startColor[2];
-    } else {
-      this.particleData[particleIndex + 3] = this.config.particleColor[0];
-      this.particleData[particleIndex + 4] = this.config.particleColor[1];
-      this.particleData[particleIndex + 5] = this.config.particleColor[2];
-    }
-    
-    // Age and lifetime - set a lifetime from the config with small variance
-    const baseLifetime = this.config.lifetime || 5;
-    this.particleData[particleIndex + 6] = 0; // Age starts at 0
-    this.particleData[particleIndex + 7] = baseLifetime + (Math.random() * 0.4 - 0.2) * baseLifetime; // Add up to ±20% variance
+    // Use the emitter to create a new particle
+    this.emitter.emitParticle(this.particleData, this.activeParticles, this.particleVelocities);
     
     this.activeParticles++;
     return true;
@@ -549,12 +217,12 @@ export class ParticleSystem {
 
   updateParticles(deltaTime) {
     // Fixed-step physics system - accumulate real time and step at fixed intervals
-    this.physicsAccumulator += deltaTime;
+    this.physics.physicsAccumulator += deltaTime;
     
     // Ensure a minimum update frequency for smoother motion at low emission rates
     const now = performance.now() / 1000;
-    const timeSinceLastUpdate = now - this.lastUpdateTime;
-    const forceUpdate = timeSinceLastUpdate > (1.0 / this.minUpdatesPerSecond);
+    const timeSinceLastUpdate = now - this.physics.lastUpdateTime;
+    const forceUpdate = timeSinceLastUpdate > (1.0 / this.physics.minUpdatesPerSecond);
     
     if (this.emitting) {
       // Update emission timer
@@ -634,16 +302,28 @@ export class ParticleSystem {
     }
     
     // Take fixed physics steps based on accumulated time
-    while (this.physicsAccumulator >= this.fixedDeltaTime) {
-      this.updatePhysics(this.fixedDeltaTime);
-      this.physicsAccumulator -= this.fixedDeltaTime;
-      this.physicsClock += this.fixedDeltaTime;
+    while (this.physics.physicsAccumulator >= this.physics.fixedDeltaTime) {
+      this.physics.updatePhysics(
+        this.physics.fixedDeltaTime, 
+        this.activeParticles, 
+        this.config,
+        this.instanceBuffer,
+        this.velocityBuffer
+      );
+      this.physics.physicsAccumulator -= this.physics.fixedDeltaTime;
+      this.physics.physicsClock += this.physics.fixedDeltaTime;
     }
     
     // Force an update if it's been too long since the last one
     if (forceUpdate && this.activeParticles > 0) {
-      this.updatePhysics(this.fixedDeltaTime);
-      this.lastUpdateTime = now;
+      this.physics.updatePhysics(
+        this.physics.fixedDeltaTime, 
+        this.activeParticles, 
+        this.config,
+        this.instanceBuffer,
+        this.velocityBuffer
+      );
+      this.physics.lastUpdateTime = now;
     }
     
     // Readback less frequently but still regularly to clean up particles
@@ -652,121 +332,21 @@ export class ParticleSystem {
     }
   }
   
-  updatePhysics(fixedDeltaTime) {
-    // Nothing to update if no particles are active
-    if (this.activeParticles <= 0 || !this.computeReady) {
-      return;
-    }
-    
-    // Update physics uniforms for compute shader
-    const physicsData = new Float32Array([
-      fixedDeltaTime,
-      this.config.particleSpeed,
-      this.physicsSettings.gravity,
-      this.physicsSettings.turbulence,
-      this.physicsSettings.attractorStrength,
-      0.0, // padding
-      this.physicsSettings.attractorPosition[0],
-      this.physicsSettings.attractorPosition[1],
-      this.physicsSettings.attractorPosition[2],
-      0.0, // padding2
-      0.0, // Extra padding
-      0.0  // Extra padding
-    ]);
-    this.device.queue.writeBuffer(this.physicsUniformBuffer, 0, physicsData);
-    
-    // Run compute shader to update particles on the GPU
-    const commandEncoder = this.device.createCommandEncoder({label: "ParticlePhysicsEncoder"});
-    const computePass = commandEncoder.beginComputePass({label: "ParticlePhysicsPass"});
-    
-    computePass.setPipeline(this.computePipeline);
-    computePass.setBindGroup(0, this.computeBindGroup);
-    
-    // Dispatch enough workgroups to cover all particles (64 threads per workgroup)
-    const workgroupCount = Math.max(1, Math.ceil(this.activeParticles / 64));
-    computePass.dispatchWorkgroups(workgroupCount, 1, 1);
-    
-    computePass.end();
-    this.device.queue.submit([commandEncoder.finish()]);
-    
-    // Update the last update time
-    this.lastUpdateTime = performance.now() / 1000;
-  }
-  
   async readbackAndProcessParticles() {
     if (this.activeParticles <= 0) {
       return;
     }
     
     try {
-      // Create staging buffers to read back both position and velocity data
-      const particleDataStagingBuffer = this.device.createBuffer({
-        size: this.activeParticles * 8 * 4,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-        label: "ParticleDataReadbackBuffer"
-      });
-      
-      const velocityStagingBuffer = this.device.createBuffer({
-        size: this.activeParticles * 4 * 4,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-        label: "VelocityReadbackBuffer"
-      });
-      
-      // Copy both buffers using a single command encoder
-      const commandEncoder = this.device.createCommandEncoder({
-        label: "ParticleReadbackEncoder"
-      });
-      
-      // Copy particle data
-      const particleDataCopySize = this.activeParticles * 8 * 4;
-      commandEncoder.copyBufferToBuffer(
-        this.instanceBuffer, 0,
-        particleDataStagingBuffer, 0,
-        particleDataCopySize
+      const result = await this.physics.readbackAndProcessParticles(
+        this.activeParticles,
+        this.particleData,
+        this.particleVelocities,
+        this.instanceBuffer,
+        this.velocityBuffer
       );
       
-      // Copy velocity data
-      const velocityCopySize = this.activeParticles * 4 * 4;
-      commandEncoder.copyBufferToBuffer(
-        this.velocityBuffer, 0,
-        velocityStagingBuffer, 0,
-        velocityCopySize
-      );
-      
-      this.device.queue.submit([commandEncoder.finish()]);
-      
-      // Map and read both buffers in parallel
-      const [particleDataArray, velocityArray] = await Promise.all([
-        (async () => {
-          await particleDataStagingBuffer.mapAsync(GPUMapMode.READ);
-          const mapped = new Float32Array(particleDataStagingBuffer.getMappedRange());
-          const data = new Float32Array(mapped.length);
-          data.set(mapped);
-          particleDataStagingBuffer.unmap();
-          return data;
-        })(),
-        (async () => {
-          await velocityStagingBuffer.mapAsync(GPUMapMode.READ);
-          const mapped = new Float32Array(velocityStagingBuffer.getMappedRange());
-          const data = new Float32Array(mapped.length);
-          data.set(mapped);
-          velocityStagingBuffer.unmap();
-          return data;
-        })()
-      ]);
-      
-      // Copy the data to our CPU-side arrays for processing
-      for (let i = 0; i < this.activeParticles * 8; i++) {
-        this.particleData[i] = particleDataArray[i];
-      }
-      
-      for (let i = 0; i < this.activeParticles * 4; i++) {
-        this.particleVelocities[i] = velocityArray[i];
-      }
-      
-      // Clean up staging buffers
-      particleDataStagingBuffer.destroy();
-      velocityStagingBuffer.destroy();
+      if (!result.shouldUpdate) return;
       
       // Process the data to remove dead particles
       let newActiveCount = 0;
@@ -819,177 +399,14 @@ export class ParticleSystem {
       return;
     }
     
-    let posX, posY, posZ;
-    
-    if (this.config.emissionShape === 'cube') {
-      let innerLength = this.config.innerLength || 0;
-      let outerLength = this.config.outerLength || this.config.cubeLength;
-      
-      if (innerLength > 0) {
-        const sides = Math.floor(Math.random() * 6);
-        const u = Math.random() - 0.5;
-        const v = Math.random() - 0.5;
-        
-        switch(sides) {
-          case 0:
-            posX = u; posY = v; posZ = 0.5; break;
-          case 1:
-            posX = u; posY = v; posZ = -0.5; break;
-          case 2:
-            posX = 0.5; posY = u; posZ = v; break;
-          case 3:
-            posX = -0.5; posY = u; posZ = v; break;
-          case 4:
-            posX = u; posY = 0.5; posZ = v; break;
-          case 5:
-            posX = u; posY = -0.5; posZ = v; break;
-        }
-        
-        const t = Math.random();
-        const length = innerLength + t * (outerLength - innerLength);
-        
-        posX *= length;
-        posY *= length;
-        posZ *= length;
-      } else {
-        posX = (Math.random() - 0.5) * outerLength;
-        posY = (Math.random() - 0.5) * outerLength;
-        posZ = (Math.random() - 0.5) * outerLength;
-      }
-    } else if (this.config.emissionShape === 'sphere') {
-      let theta = Math.random() * 2 * Math.PI;
-      let phi = Math.acos(2 * Math.random() - 1);
-      
-      let dirX = Math.sin(phi) * Math.cos(theta);
-      let dirY = Math.sin(phi) * Math.sin(theta);
-      let dirZ = Math.cos(phi);
-      
-      let radius;
-      if (this.config.innerRadius === 0) {
-        radius = this.config.outerRadius * Math.cbrt(Math.random());
-      } else {
-        radius = this.config.innerRadius + (this.config.outerRadius - this.config.innerRadius) * Math.random();
-      }
-      
-      posX = dirX * radius;
-      posY = dirY * radius;
-      posZ = dirZ * radius;
-    } else if (this.config.emissionShape === 'square') {
-      const innerSize = this.config.squareInnerSize || 0;
-      const outerSize = this.config.squareSize || 2.0;
-      
-      if (innerSize > 0) {
-        const side = Math.floor(Math.random() * 4);
-        let size = innerSize + (outerSize - innerSize) * Math.random();
-        
-        switch(side) {
-          case 0:
-            posX = (Math.random() * 2 - 1) * size; posY = size; break;
-          case 1:
-            posX = size; posY = (Math.random() * 2 - 1) * size; break;
-          case 2:
-            posX = (Math.random() * 2 - 1) * size; posY = -size; break;
-          case 3:
-            posX = -size; posY = (Math.random() * 2 - 1) * size; break;
-        }
-        posZ = 0;
-      } else {
-        posX = (Math.random() * 2 - 1) * outerSize;
-        posY = (Math.random() * 2 - 1) * outerSize;
-        posZ = 0;
-      }
-    } else if (this.config.emissionShape === 'circle') {
-      const innerRadius = this.config.circleInnerRadius || 0;
-      const outerRadius = this.config.circleOuterRadius || 2.0;
-      
-      const angle = Math.random() * Math.PI * 2;
-      
-      let radius;
-      if (innerRadius > 0) {
-        radius = innerRadius + (outerRadius - innerRadius) * Math.random();
-      } else {
-        radius = outerRadius * Math.sqrt(Math.random());
-      }
-      
-      posX = Math.cos(angle) * radius;
-      posY = Math.sin(angle) * radius;
-      posZ = 0;
-    }
-    
-    // Store the position
-    const particleIndex = newIndex * 8;
-    this.particleData[particleIndex] = posX;
-    this.particleData[particleIndex + 1] = posY;
-    this.particleData[particleIndex + 2] = posZ;
-    
-    // Create velocity direction
-    const velIndex = newIndex * 4;
-    
-    const length = Math.sqrt(posX * posX + posY * posY + posZ * posZ);
-    let dirX, dirY, dirZ;
-    
-    if (length > 0.0001) {
-      // For circle shape with tangential velocity direction
-      if (this.config.emissionShape === 'circle' && this.config.circleVelocityDirection === 'tangential') {
-        // Create a tangential direction vector (perpendicular to radius vector)
-        // For 2D circle in XY plane, tangent vector is (-y, x, 0)
-        dirX = -posY / length;
-        dirY = posX / length;
-        dirZ = 0;
-      } else {
-        // Default direction away from origin for all shapes
-        dirX = posX / length;
-        dirY = posY / length;
-        dirZ = posZ / length;
-      }
-    } else {
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      dirX = Math.sin(phi) * Math.cos(theta);
-      dirY = Math.sin(phi) * Math.sin(theta);
-      dirZ = Math.cos(phi);
-    }
-    
-    // Store velocity vector
-    if (this.config.overrideXVelocity) {
-      this.particleVelocities[velIndex] = this.config.xVelocity;
-    } else {
-      this.particleVelocities[velIndex] = dirX * this.config.particleSpeed;
-    }
-    
-    if (this.config.overrideYVelocity) {
-      this.particleVelocities[velIndex + 1] = this.config.yVelocity;
-    } else {
-      this.particleVelocities[velIndex + 1] = dirY * this.config.particleSpeed;
-    }
-    
-    if (this.config.overrideZVelocity) {
-      this.particleVelocities[velIndex + 2] = this.config.zVelocity;
-    } else {
-      this.particleVelocities[velIndex + 2] = dirZ * this.config.particleSpeed;
-    }
-    
-    this.particleVelocities[velIndex + 3] = 0;
-    
-    // Color
-    if (this.config.colorTransitionEnabled) {
-      this.particleData[particleIndex + 3] = this.config.startColor[0];
-      this.particleData[particleIndex + 4] = this.config.startColor[1];
-      this.particleData[particleIndex + 5] = this.config.startColor[2];
-    } else {
-      this.particleData[particleIndex + 3] = this.config.particleColor[0];
-      this.particleData[particleIndex + 4] = this.config.particleColor[1];
-      this.particleData[particleIndex + 5] = this.config.particleColor[2];
-    }
-    
-    // Age and lifetime
-    const baseLifetime = this.config.lifetime || 5;
-    this.particleData[particleIndex + 6] = 0;
-    this.particleData[particleIndex + 7] = baseLifetime + (Math.random() * 0.4 - 0.2) * baseLifetime;
+    // Use the emitter to respawn the particle
+    this.emitter.emitParticle(this.particleData, newIndex, this.particleVelocities);
   }
 
   updateBuffers() {
-    this.device.queue.writeBuffer(this.instanceBuffer, 0, this.particleData, 0, this.activeParticles * 8);
+    if (this.activeParticles > 0) {
+      this.device.queue.writeBuffer(this.instanceBuffer, 0, this.particleData, 0, this.activeParticles * 8);
+    }
   }
 
   updateParticleColors() {
@@ -1058,12 +475,11 @@ export class ParticleSystem {
   }
    
   setGravity(gravityValue) {
-    this.physicsSettings.gravity = gravityValue;
+    this.physics.setGravity(gravityValue);
   }
   
   setAttractor(strength, position) {
-    this.physicsSettings.attractorStrength = strength;
-    this.physicsSettings.attractorPosition = position;
+    this.physics.setAttractor(strength, position);
   }
 }
 
