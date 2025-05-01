@@ -113,6 +113,10 @@ async function main() {
     outerLength: 2.0,
     innerRadius: 0.0,
     outerRadius: 2.0,
+    // Shape rotation settings
+    shapeRotationX: 0,
+    shapeRotationY: 0,
+    shapeRotationZ: 0,
     // 2D shape settings
     squareSize: 2.0,
     squareInnerSize: 0.0,

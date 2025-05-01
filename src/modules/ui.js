@@ -236,6 +236,14 @@ export class ParticleUI {
     this.squareSettings = document.getElementById('square-settings');
     this.circleSettings = document.getElementById('circle-settings');
     
+    // Shape rotation sliders
+    this.shapeRotationXSlider = document.getElementById('shape-rotation-x-slider');
+    this.shapeRotationYSlider = document.getElementById('shape-rotation-y-slider');
+    this.shapeRotationZSlider = document.getElementById('shape-rotation-z-slider');
+    this.shapeRotationXValue = document.getElementById('shape-rotation-x-value');
+    this.shapeRotationYValue = document.getElementById('shape-rotation-y-value');
+    this.shapeRotationZValue = document.getElementById('shape-rotation-z-value');
+    
     // 3D shape settings
     this.cubeLengthSlider = document.getElementById('cube-length-slider');
     this.cubeLengthValue = document.getElementById('cube-length-value');
@@ -969,6 +977,37 @@ export class ParticleUI {
         this.config.onAppearanceChange();
       }
     });
+    
+    // Shape rotation sliders
+    this.shapeRotationXSlider.addEventListener('input', this.onShapeRotationXChange = () => {
+      const value = this.shapeRotationXSlider.value;
+      this.shapeRotationXValue.textContent = `${value}°`;
+      this.config.shapeRotationX = parseFloat(value);
+      
+      if (this.config.onRespawn) {
+        this.config.onRespawn();
+      }
+    });
+    
+    this.shapeRotationYSlider.addEventListener('input', this.onShapeRotationYChange = () => {
+      const value = this.shapeRotationYSlider.value;
+      this.shapeRotationYValue.textContent = `${value}°`;
+      this.config.shapeRotationY = parseFloat(value);
+      
+      if (this.config.onRespawn) {
+        this.config.onRespawn();
+      }
+    });
+    
+    this.shapeRotationZSlider.addEventListener('input', this.onShapeRotationZChange = () => {
+      const value = this.shapeRotationZSlider.value;
+      this.shapeRotationZValue.textContent = `${value}°`;
+      this.config.shapeRotationZ = parseFloat(value);
+      
+      if (this.config.onRespawn) {
+        this.config.onRespawn();
+      }
+    });
   }
 
   removeAllEventListeners() {
@@ -1119,6 +1158,17 @@ export class ParticleUI {
     // Circle velocity direction dropdown
     if (this.onCircleVelocityDirectionChange) {
       this.circleVelocityDirectionSelect.removeEventListener('change', this.onCircleVelocityDirectionChange);
+    }
+    
+    // Shape rotation sliders
+    if (this.onShapeRotationXChange) {
+      this.shapeRotationXSlider.removeEventListener('input', this.onShapeRotationXChange);
+    }
+    if (this.onShapeRotationYChange) {
+      this.shapeRotationYSlider.removeEventListener('input', this.onShapeRotationYChange);
+    }
+    if (this.onShapeRotationZChange) {
+      this.shapeRotationZSlider.removeEventListener('input', this.onShapeRotationZChange);
     }
   }
 
@@ -1351,6 +1401,14 @@ export class ParticleUI {
     
     // Initialize circle velocity direction dropdown
     this.circleVelocityDirectionSelect.value = this.config.circleVelocityDirection || 'away';
+    
+    // Initialize shape rotation sliders
+    this.shapeRotationXSlider.value = this.config.shapeRotationX || 0;
+    this.shapeRotationXValue.textContent = `${this.config.shapeRotationX || 0}°`;
+    this.shapeRotationYSlider.value = this.config.shapeRotationY || 0;
+    this.shapeRotationYValue.textContent = `${this.config.shapeRotationY || 0}°`;
+    this.shapeRotationZSlider.value = this.config.shapeRotationZ || 0;
+    this.shapeRotationZValue.textContent = `${this.config.shapeRotationZ || 0}°`;
   }
 
   // Helper to convert RGB array to hex string

@@ -26,6 +26,11 @@ export class ParticleEmitter {
       posZ = 0;
     }
     
+    // Apply shape rotation if configured
+    if (this.config.shapeRotationX || this.config.shapeRotationY || this.config.shapeRotationZ) {
+      [posX, posY, posZ] = this.applyRotation(posX, posY, posZ);
+    }
+    
     // Store the position
     const particleIndex = index * 8;
     particleData[particleIndex] = posX;
@@ -41,6 +46,48 @@ export class ParticleEmitter {
     
     // Set age and lifetime
     this.setParticleLifetime(particleData, particleIndex);
+  }
+
+  // Apply rotation transformation to particle position
+  applyRotation(x, y, z) {
+    let newX = x, newY = y, newZ = z;
+    
+    // Convert degrees to radians
+    const radX = (this.config.shapeRotationX || 0) * Math.PI / 180;
+    const radY = (this.config.shapeRotationY || 0) * Math.PI / 180;
+    const radZ = (this.config.shapeRotationZ || 0) * Math.PI / 180;
+    
+    // Apply X-axis rotation
+    if (radX !== 0) {
+      const cosX = Math.cos(radX);
+      const sinX = Math.sin(radX);
+      const oldY = newY;
+      const oldZ = newZ;
+      newY = oldY * cosX - oldZ * sinX;
+      newZ = oldY * sinX + oldZ * cosX;
+    }
+    
+    // Apply Y-axis rotation
+    if (radY !== 0) {
+      const cosY = Math.cos(radY);
+      const sinY = Math.sin(radY);
+      const oldX = newX;
+      const oldZ = newZ;
+      newX = oldX * cosY + oldZ * sinY;
+      newZ = -oldX * sinY + oldZ * cosY;
+    }
+    
+    // Apply Z-axis rotation
+    if (radZ !== 0) {
+      const cosZ = Math.cos(radZ);
+      const sinZ = Math.sin(radZ);
+      const oldX = newX;
+      const oldY = newY;
+      newX = oldX * cosZ - oldY * sinZ;
+      newY = oldX * sinZ + oldY * cosZ;
+    }
+    
+    return [newX, newY, newZ];
   }
 
   emitFromCube() {
