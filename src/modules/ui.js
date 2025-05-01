@@ -217,6 +217,12 @@ export class ParticleUI {
     this.gravityStrengthValue = document.getElementById('gravity-strength-value');
     this.gravityStrengthContainer = document.getElementById('gravity-strength-container');
     
+    // Damping
+    this.dampingCheckbox = document.getElementById('damping-checkbox');
+    this.dampingStrengthSlider = document.getElementById('damping-strength-slider');
+    this.dampingStrengthValue = document.getElementById('damping-strength-value');
+    this.dampingStrengthContainer = document.getElementById('damping-strength-container');
+    
     // Attractor
     this.attractorCheckbox = document.getElementById('attractor-checkbox');
     this.attractorStrengthSlider = document.getElementById('attractor-strength-slider');
@@ -350,6 +356,37 @@ export class ParticleUI {
       
       if (this.config.gravityEnabled && this.config.onPhysicsChange) {
         this.config.onPhysicsChange('gravity', parseFloat(value));
+      }
+    });
+    
+    // Damping checkbox
+    this.dampingCheckbox.addEventListener('change', this.onDampingChange = () => {
+      this.config.dampingEnabled = this.dampingCheckbox.checked;
+      
+      // Show/hide damping strength slider based on damping enabled state
+      if (this.config.dampingEnabled) {
+        this.dampingStrengthContainer.classList.remove('hidden');
+        // Set damping to the slider value
+        const dampingValue = parseFloat(this.dampingStrengthSlider.value);
+        if (this.config.onPhysicsChange) {
+          this.config.onPhysicsChange('damping', dampingValue);
+        }
+      } else {
+        this.dampingStrengthContainer.classList.add('hidden');
+        // Set damping to zero when disabled
+        if (this.config.onPhysicsChange) {
+          this.config.onPhysicsChange('damping', 0);
+        }
+      }
+    });
+    
+    // Damping strength slider
+    this.dampingStrengthSlider.addEventListener('input', this.onDampingStrengthChange = () => {
+      const value = this.dampingStrengthSlider.value;
+      this.dampingStrengthValue.textContent = value;
+      
+      if (this.config.dampingEnabled && this.config.onPhysicsChange) {
+        this.config.onPhysicsChange('damping', parseFloat(value));
       }
     });
     
@@ -1155,6 +1192,14 @@ export class ParticleUI {
       this.gravityStrengthSlider.removeEventListener('input', this.onGravityStrengthChange);
     }
     
+    // Damping event listeners
+    if (this.onDampingChange) {
+      this.dampingCheckbox.removeEventListener('change', this.onDampingChange);
+    }
+    if (this.onDampingStrengthChange) {
+      this.dampingStrengthSlider.removeEventListener('input', this.onDampingStrengthChange);
+    }
+    
     // Attractor event listeners
     if (this.onAttractorChange) {
       this.attractorCheckbox.removeEventListener('change', this.onAttractorChange);
@@ -1332,6 +1377,17 @@ export class ParticleUI {
       this.gravityStrengthContainer.classList.remove('hidden');
     } else {
       this.gravityStrengthContainer.classList.add('hidden');
+    }
+    
+    // Initialize damping settings
+    this.dampingCheckbox.checked = this.config.dampingEnabled || false;
+    this.dampingStrengthSlider.value = this.config.dampingStrength || 1;
+    this.dampingStrengthValue.textContent = this.config.dampingStrength || 1;
+    
+    if (this.config.dampingEnabled) {
+      this.dampingStrengthContainer.classList.remove('hidden');
+    } else {
+      this.dampingStrengthContainer.classList.add('hidden');
     }
     
     // Initialize attractor settings

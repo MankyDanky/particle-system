@@ -125,6 +125,10 @@ async function main() {
     particleSize: 0.5,
     particleSpeed: 1.0,
     
+    // Physics settings
+    dampingEnabled: false,
+    dampingStrength: 0.5,
+    
     // Velocity override settings
     overrideXVelocity: false,
     overrideYVelocity: false,
@@ -283,6 +287,9 @@ async function main() {
       if (param === 'gravity') {
         system.setGravity(value);
         selectedConfig.gravityStrength = value;
+      } else if (param === 'damping') {
+        system.physics.setDamping(value);
+        selectedConfig.dampingStrength = value;
       } else if (param === 'turbulence') {
         system.setTurbulence(value);
       } else if (param === 'attractor') {

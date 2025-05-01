@@ -283,7 +283,7 @@ export const particlePhysicsShader = `
     gravity: f32,
     turbulence: f32,
     attractorStrength: f32,
-    padding: f32,
+    damping: f32, // Changed padding to damping
     attractorPositionX: f32,
     attractorPositionY: f32,
     attractorPositionZ: f32,
@@ -342,8 +342,16 @@ export const particlePhysicsShader = `
     let velocityIndex = index;
     let currentVelocity = velocities[velocityIndex].velocity;
     
-    // Apply gravity if enabled (gravity value > 0)
+    // Apply damping if enabled
     var modifiedVelocity = currentVelocity;
+    if (physics.damping > 0.0) {
+      // Apply damping factor (1.0 - damping * deltaTime) to gradually reduce velocity
+      // This ensures damping is framerate-independent
+      let dampingFactor = max(0.0, 1.0 - physics.damping * physics.deltaTime);
+      modifiedVelocity *= dampingFactor;
+    }
+    
+    // Apply gravity if enabled (gravity value > 0)
     if (physics.gravity > 0.0) {
       // Apply downward force - reduce Y component of velocity
       modifiedVelocity.y -= physics.gravity * physics.deltaTime;

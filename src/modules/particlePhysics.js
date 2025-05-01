@@ -10,7 +10,8 @@ export class ParticlePhysics {
       gravity: 0.0,
       turbulence: 0.0,
       attractorStrength: 0.0,
-      attractorPosition: [0.0, 0.0, 0.0]
+      attractorPosition: [0.0, 0.0, 0.0],
+      damping: 0.0 // Added damping parameter
     };
     
     // Fixed timestep physics system for consistent updates
@@ -115,7 +116,7 @@ export class ParticlePhysics {
       this.physicsSettings.gravity,
       this.physicsSettings.turbulence,
       this.physicsSettings.attractorStrength,
-      0.0, // padding
+      this.physicsSettings.damping, // Use damping instead of padding
       this.physicsSettings.attractorPosition[0],
       this.physicsSettings.attractorPosition[1],
       this.physicsSettings.attractorPosition[2],
@@ -227,6 +228,10 @@ export class ParticlePhysics {
       console.error("Error reading back particle data:", error);
       return { activeCount: activeParticles, shouldUpdate: false };
     }
+  }
+  
+  setDamping(dampingValue) {
+    this.physicsSettings.damping = dampingValue;
   }
   
   setGravity(gravityValue) {
