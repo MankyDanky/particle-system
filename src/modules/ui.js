@@ -256,6 +256,17 @@ export class ParticleUI {
     this.circleOuterRadiusSlider = document.getElementById('circle-outer-radius-slider');
     this.circleOuterRadiusValue = document.getElementById('circle-outer-radius-value');
     
+    // Rotation controls
+    this.randomRotationCheckbox = document.getElementById('random-rotation-checkbox');
+    this.fixedRotationContainer = document.getElementById('fixed-rotation-container');
+    this.randomRotationContainer = document.getElementById('random-rotation-container');
+    this.rotationSlider = document.getElementById('rotation-slider');
+    this.rotationValue = document.getElementById('rotation-value');
+    this.minRotationSlider = document.getElementById('min-rotation-slider');
+    this.minRotationValue = document.getElementById('min-rotation-value');
+    this.maxRotationSlider = document.getElementById('max-rotation-slider');
+    this.maxRotationValue = document.getElementById('max-rotation-value');
+    
     // Texture controls - reference the static HTML elements
     this.textureCheckbox = document.getElementById('texture-checkbox');
     this.textureUploadContainer = document.getElementById('texture-upload-container');
@@ -852,6 +863,67 @@ export class ParticleUI {
         }
       });
     }
+    
+    // Rotation controls event handlers
+    this.randomRotationCheckbox.addEventListener('change', this.onRandomRotationChange = () => {
+      this.config.randomRotation = this.randomRotationCheckbox.checked;
+      
+      if (this.config.randomRotation) {
+        this.fixedRotationContainer.classList.add('hidden');
+        this.randomRotationContainer.classList.remove('hidden');
+      } else {
+        this.fixedRotationContainer.classList.remove('hidden');
+        this.randomRotationContainer.classList.add('hidden');
+      }
+      
+      if (this.config.onAppearanceChange) {
+        this.config.onAppearanceChange();
+      }
+    });
+    
+    this.rotationSlider.addEventListener('input', this.onRotationChange = () => {
+      const value = this.rotationSlider.value;
+      this.rotationValue.textContent = `${value}°`;
+      this.config.rotation = parseFloat(value);
+      
+      if (this.config.onAppearanceChange) {
+        this.config.onAppearanceChange();
+      }
+    });
+    
+    this.minRotationSlider.addEventListener('input', this.onMinRotationChange = () => {
+      const value = this.minRotationSlider.value;
+      this.minRotationValue.textContent = `${value}°`;
+      this.config.minRotation = parseFloat(value);
+      
+      // Make sure min rotation is less than max rotation
+      if (this.config.minRotation >= this.config.maxRotation) {
+        this.maxRotationSlider.value = this.config.minRotation + 10;
+        this.maxRotationValue.textContent = `${this.maxRotationSlider.value}°`;
+        this.config.maxRotation = parseFloat(this.maxRotationSlider.value);
+      }
+      
+      if (this.config.onAppearanceChange) {
+        this.config.onAppearanceChange();
+      }
+    });
+    
+    this.maxRotationSlider.addEventListener('input', this.onMaxRotationChange = () => {
+      const value = this.maxRotationSlider.value;
+      this.maxRotationValue.textContent = `${value}°`;
+      this.config.maxRotation = parseFloat(value);
+      
+      // Make sure max rotation is greater than min rotation
+      if (this.config.maxRotation <= this.config.minRotation) {
+        this.minRotationSlider.value = this.config.maxRotation - 10;
+        this.minRotationValue.textContent = `${this.minRotationSlider.value}°`;
+        this.config.minRotation = parseFloat(this.minRotationSlider.value);
+      }
+      
+      if (this.config.onAppearanceChange) {
+        this.config.onAppearanceChange();
+      }
+    });
   }
 
   removeAllEventListeners() {
@@ -981,6 +1053,20 @@ export class ParticleUI {
     if (this.onTextureFileChange) {
       this.textureFileInput.removeEventListener('change', this.onTextureFileChange);
     }
+    
+    // Rotation controls event listeners
+    if (this.onRandomRotationChange) {
+      this.randomRotationCheckbox.removeEventListener('change', this.onRandomRotationChange);
+    }
+    if (this.onRotationChange) {
+      this.rotationSlider.removeEventListener('input', this.onRotationChange);
+    }
+    if (this.onMinRotationChange) {
+      this.minRotationSlider.removeEventListener('input', this.onMinRotationChange);
+    }
+    if (this.onMaxRotationChange) {
+      this.maxRotationSlider.removeEventListener('input', this.onMaxRotationChange);
+    }
   }
 
   updateUIState() {
@@ -1018,6 +1104,23 @@ export class ParticleUI {
       this.zVelocitySliderContainer.classList.remove('hidden');
     } else {
       this.zVelocitySliderContainer.classList.add('hidden');
+    }
+    
+    // Initialize rotation controls
+    this.randomRotationCheckbox.checked = this.config.randomRotation || false;
+    this.rotationSlider.value = this.config.rotation || 0;
+    this.rotationValue.textContent = `${this.config.rotation || 0}°`;
+    this.minRotationSlider.value = this.config.minRotation || 0;
+    this.minRotationValue.textContent = `${this.config.minRotation || 0}°`;
+    this.maxRotationSlider.value = this.config.maxRotation || 90;
+    this.maxRotationValue.textContent = `${this.config.maxRotation || 90}°`;
+    
+    if (this.config.randomRotation) {
+      this.fixedRotationContainer.classList.add('hidden');
+      this.randomRotationContainer.classList.remove('hidden');
+    } else {
+      this.fixedRotationContainer.classList.remove('hidden');
+      this.randomRotationContainer.classList.add('hidden');
     }
     
     // Initialize UI based on config values

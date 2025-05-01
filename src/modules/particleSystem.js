@@ -41,7 +41,7 @@ export class ParticleSystem {
     
     // Create appearance uniform buffer for this specific particle system
     this.appearanceUniformBuffer = device.createBuffer({
-      size: 64, // [fadeEnabled, colorTransitionEnabled, particleSize, textureEnabled, colors...]
+      size: 96, // [fadeEnabled, colorTransitionEnabled, particleSize, textureEnabled, colors...] + rotation values
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       label: "appearanceUniformBuffer"
     });
@@ -152,11 +152,16 @@ export class ParticleSystem {
       this.config.particleSize,
       this.config.textureEnabled ? 1.0 : 0.0, // textureEnabled flag instead of padding
       // Single color (vec3 + padding)
-      this.config.particleColor[0], this.config.particleColor[1], this.config.particleColor[2], 0.0,
+      this.config.particleColor[0], this.config.particleColor[1], this.config.particleColor[2], 
+      this.config.rotation || 0.0, // Fixed rotation in degrees
       // Start color (vec3 + padding)
-      this.config.startColor[0], this.config.startColor[1], this.config.startColor[2], 0.0,
+      this.config.startColor[0], this.config.startColor[1], this.config.startColor[2], 
+      this.config.randomRotation ? 1.0 : 0.0, // randomRotation flag
       // End color (vec3 + padding)
-      this.config.endColor[0], this.config.endColor[1], this.config.endColor[2], 0.0
+      this.config.endColor[0], this.config.endColor[1], this.config.endColor[2], 
+      this.config.minRotation || 0.0, // Min rotation in degrees
+      this.config.maxRotation || 90.0, // Max rotation in degrees
+      0.0 // padding
     ]);
     
     this.device.queue.writeBuffer(this.appearanceUniformBuffer, 0, appearanceData);

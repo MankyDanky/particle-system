@@ -143,6 +143,12 @@ async function main() {
     // Mode settings
     burstMode: false,
     
+    // Rotation settings
+    rotation: 0,
+    randomRotation: false,
+    minRotation: 0,
+    maxRotation: 90,
+    
     // Default name for the first system
     name: 'System 1',
     
@@ -162,7 +168,7 @@ async function main() {
   });
   
   const appearanceUniformBuffer = device.createBuffer({
-    size: 64, // [fadeEnabled, colorTransitionEnabled, particleSize, padding, colors...]
+    size: 96, // [fadeEnabled, colorTransitionEnabled, particleSize, textureEnabled, colors...] + rotation values
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   
@@ -804,13 +810,18 @@ async function main() {
       systemConfig.fadeEnabled ? 1.0 : 0.0,
       systemConfig.colorTransitionEnabled ? 1.0 : 0.0,
       systemConfig.particleSize,
-      0.0, // padding
+      systemConfig.textureEnabled ? 1.0 : 0.0, // textureEnabled flag
       // Single color (vec3 + padding)
-      systemConfig.particleColor[0], systemConfig.particleColor[1], systemConfig.particleColor[2], 0.0,
+      systemConfig.particleColor[0], systemConfig.particleColor[1], systemConfig.particleColor[2], 
+      systemConfig.rotation || 0.0, // Fixed rotation in degrees
       // Start color (vec3 + padding)
-      systemConfig.startColor[0], systemConfig.startColor[1], systemConfig.startColor[2], 0.0,
+      systemConfig.startColor[0], systemConfig.startColor[1], systemConfig.startColor[2], 
+      systemConfig.randomRotation ? 1.0 : 0.0, // randomRotation flag
       // End color (vec3 + padding)
-      systemConfig.endColor[0], systemConfig.endColor[1], systemConfig.endColor[2], 0.0
+      systemConfig.endColor[0], systemConfig.endColor[1], systemConfig.endColor[2], 
+      systemConfig.minRotation || 0.0, // Min rotation in degrees
+      systemConfig.maxRotation || 90.0, // Max rotation in degrees 
+      0.0 // padding
     ]);
     
     device.queue.writeBuffer(appearanceUniformBuffer, 0, appearanceData);

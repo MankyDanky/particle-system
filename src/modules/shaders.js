@@ -15,11 +15,13 @@ export const particleShader = `
     particleSize: f32,
     textureEnabled: f32,
     singleColor: vec3<f32>,
-    padding2: f32,
+    rotation: f32,
     startColor: vec3<f32>,
-    padding3: f32,
+    randomRotation: f32,
     endColor: vec3<f32>,
-    padding4: f32,
+    minRotation: f32,
+    maxRotation: f32,
+    padding: f32,
   }
 
   @binding(0) @group(0) var<uniform> uniforms : Uniforms;
@@ -72,9 +74,30 @@ export const particleShader = `
     let baseScaleFactor = 0.15 * appearance.particleSize;
     let distanceScaleFactor = baseScaleFactor * (10.0 / cameraToParticle);
     
+    // Create a unique rotation value for each particle
+    var particleRotation = appearance.rotation;
+    if (appearance.randomRotation > 0.5) {
+      // Use the particle's lifetime as a seed to create a consistent random rotation
+      // between minRotation and maxRotation
+      particleRotation = appearance.minRotation + 
+        fract(sin(lifetime * 12345.67) * 43758.5453) * 
+        (appearance.maxRotation - appearance.minRotation);
+    }
+    
+    // Convert rotation from degrees to radians
+    let rotRadians = particleRotation * 0.01745329252; // PI/180
+    
+    // Create a rotation matrix for 2D rotation in screen space
+    let cosTheta = cos(rotRadians);
+    let sinTheta = sin(rotRadians);
+    
+    // Apply rotation to the vertex position before scaling and positioning
+    let rotatedX = input.position.x * cosTheta - input.position.y * sinTheta;
+    let rotatedY = input.position.x * sinTheta + input.position.y * cosTheta;
+    
     let finalPosition = vec4<f32>(
-      viewCenter.x + input.position.x * distanceScaleFactor * uniforms.aspectRatio * viewCenter.w,
-      viewCenter.y + input.position.y * distanceScaleFactor * viewCenter.w,
+      viewCenter.x + rotatedX * distanceScaleFactor * uniforms.aspectRatio * viewCenter.w,
+      viewCenter.y + rotatedY * distanceScaleFactor * viewCenter.w,
       viewCenter.z,
       viewCenter.w
     );

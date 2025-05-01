@@ -115,6 +115,37 @@
           <span id="circle-outer-radius-value">2</span>
         </div>
       </div>
+      
+      <!-- Rotation Controls Section -->
+      <div class="rotation-controls">
+        <h4>Particle Rotation</h4>
+        <div class="checkbox-container">
+          <input type="checkbox" id="random-rotation-checkbox">
+          <label for="random-rotation-checkbox">Use Random Rotation</label>
+        </div>
+        
+        <div id="fixed-rotation-container">
+          <div class="slider-container">
+            <label for="rotation-slider">Fixed Rotation (degrees):</label>
+            <input type="range" id="rotation-slider" min="0" max="360" value="0" step="1">
+            <span id="rotation-value">0°</span>
+          </div>
+        </div>
+        
+        <div id="random-rotation-container" class="hidden">
+          <div class="slider-container">
+            <label for="min-rotation-slider">Min Rotation (degrees):</label>
+            <input type="range" id="min-rotation-slider" min="0" max="360" value="0" step="1">
+            <span id="min-rotation-value">0°</span>
+          </div>
+          
+          <div class="slider-container">
+            <label for="max-rotation-slider">Max Rotation (degrees):</label>
+            <input type="range" id="max-rotation-slider" min="0" max="360" value="90" step="1">
+            <span id="max-rotation-value">90°</span>
+          </div>
+        </div>
+      </div>
     </div>
     
     <!-- Appearance Tab Content -->
