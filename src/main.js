@@ -16,28 +16,28 @@ async function main() {
   
   // Texture cache for bloom effects
   const textureCache = {
-    bloomSourceTextures: [],
-    bloomCompositeTextures: [],
+    bloomSourceTextures: {},
+    bloomCompositeTextures: {},
     combinedTexture: null,
-    getBloomSourceTexture: function(index, width, height) {
-      if (!this.bloomSourceTextures[index]) {
-        this.bloomSourceTextures[index] = device.createTexture({
+    getBloomSourceTexture: function(systemId, width, height) {
+      if (!this.bloomSourceTextures[systemId]) {
+        this.bloomSourceTextures[systemId] = device.createTexture({
           size: [width, height],
           format: format,
           usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
         });
       }
-      return this.bloomSourceTextures[index];
+      return this.bloomSourceTextures[systemId];
     },
-    getBloomCompositeTexture: function(index, width, height) {
-      if (!this.bloomCompositeTextures[index]) {
-        this.bloomCompositeTextures[index] = device.createTexture({
+    getBloomCompositeTexture: function(systemId, width, height) {
+      if (!this.bloomCompositeTextures[systemId]) {
+        this.bloomCompositeTextures[systemId] = device.createTexture({
           size: [width, height],
           format: format,
           usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
         });
       }
-      return this.bloomCompositeTextures[index];
+      return this.bloomCompositeTextures[systemId];
     },
     getCombinedTexture: function(width, height) {
       if (!this.combinedTexture) {
@@ -51,13 +51,13 @@ async function main() {
     },
     resizeTextures: function(width, height) {
       // Clean up old textures
-      this.bloomSourceTextures.forEach(texture => texture?.destroy());
-      this.bloomCompositeTextures.forEach(texture => texture?.destroy());
+      Object.values(this.bloomSourceTextures).forEach(texture => texture?.destroy());
+      Object.values(this.bloomCompositeTextures).forEach(texture => texture?.destroy());
       if (this.combinedTexture) this.combinedTexture.destroy();
       
       // Reset arrays
-      this.bloomSourceTextures = [];
-      this.bloomCompositeTextures = [];
+      this.bloomSourceTextures = {};
+      this.bloomCompositeTextures = {};
       this.combinedTexture = null;
     }
   };
@@ -490,11 +490,12 @@ async function main() {
       // Process each bloom-enabled system with its own intensity
       for (let i = 0; i < bloomSystems.length; i++) {
         const { system, config } = bloomSystems[i];
+        const systemId = system.config.id; // Use the system's unique ID instead of array index
         
         if (system.activeParticles === 0) continue;
         
         // Render this system's particles to its own texture - use cached texture
-        const bloomSourceTexture = textureCache.getBloomSourceTexture(i, canvas.width, canvas.height);
+        const bloomSourceTexture = textureCache.getBloomSourceTexture(systemId, canvas.width, canvas.height);
         
         const bloomSystemRenderPassDescriptor = {
           colorAttachments: [{
@@ -516,7 +517,6 @@ async function main() {
         bloomSystemEncoder.setIndexBuffer(quadIndexBuffer, 'uint16');
         
         // Use system-specific quad buffer
-        const systemId = system.config.id;
         if (!systemQuadBuffers[systemId]) {
           // Create quad buffer if it doesn't exist yet
           systemQuadBuffers[systemId] = createQuadBufferForSystem(systemId, system.config.particleSize);
@@ -556,8 +556,8 @@ async function main() {
         };
         
         // Create or get cached bloom bind group for this specific system's texture
-        if (!bindGroupCache.systemBloomHorizontalBindGroups[i]) {
-          bindGroupCache.systemBloomHorizontalBindGroups[i] = device.createBindGroup({
+        if (!bindGroupCache.systemBloomHorizontalBindGroups[systemId]) {
+          bindGroupCache.systemBloomHorizontalBindGroups[systemId] = device.createBindGroup({
             layout: layouts.bloomBindGroupLayout,
             entries: [
               { binding: 0, resource: sampler },
@@ -569,7 +569,7 @@ async function main() {
         
         const horizontalBlurPassEncoder = commandEncoder.beginRenderPass(horizontalBlurPassDescriptor);
         horizontalBlurPassEncoder.setPipeline(blurPipeline);
-        horizontalBlurPassEncoder.setBindGroup(0, bindGroupCache.systemBloomHorizontalBindGroups[i]);
+        horizontalBlurPassEncoder.setBindGroup(0, bindGroupCache.systemBloomHorizontalBindGroups[systemId]);
         horizontalBlurPassEncoder.draw(3);
         horizontalBlurPassEncoder.end();
         
@@ -590,8 +590,8 @@ async function main() {
         verticalBlurPassEncoder.end();
         
         // Apply a second pass for smoother bloom
-        if (!bindGroupCache.secondHorizontalBindGroups[i]) {
-          bindGroupCache.secondHorizontalBindGroups[i] = device.createBindGroup({
+        if (!bindGroupCache.secondHorizontalBindGroups[systemId]) {
+          bindGroupCache.secondHorizontalBindGroups[systemId] = device.createBindGroup({
             layout: layouts.bloomBindGroupLayout,
             entries: [
               { binding: 0, resource: sampler },
@@ -603,7 +603,7 @@ async function main() {
         
         const secondHorizontalBlurPassEncoder = commandEncoder.beginRenderPass(horizontalBlurPassDescriptor);
         secondHorizontalBlurPassEncoder.setPipeline(blurPipeline);
-        secondHorizontalBlurPassEncoder.setBindGroup(0, bindGroupCache.secondHorizontalBindGroups[i]);
+        secondHorizontalBlurPassEncoder.setBindGroup(0, bindGroupCache.secondHorizontalBindGroups[systemId]);
         secondHorizontalBlurPassEncoder.draw(3);
         secondHorizontalBlurPassEncoder.end();
         
@@ -614,7 +614,7 @@ async function main() {
         secondVerticalBlurPassEncoder.end();
         
         // Create a composited bloom texture for this system (with its specific intensity)
-        const systemBloomCompositeTexture = textureCache.getBloomCompositeTexture(i, canvas.width, canvas.height);
+        const systemBloomCompositeTexture = textureCache.getBloomCompositeTexture(systemId, canvas.width, canvas.height);
         
         // Apply this system's bloom intensity by compositing the source with the blurred result
         const systemCompositePassDescriptor = {
@@ -678,7 +678,9 @@ async function main() {
     
     // Then add each bloom system's composited particles
     for (let i = 0; i < particleSystemManager.particleSystems.length; i++) {
-      const { config } = particleSystemManager.particleSystems[i];
+      const { config, system } = particleSystemManager.particleSystems[i];
+      const systemId = system.config.id;
+      
       if (!config.bloomEnabled) continue;
       
       // Set to additive blending
@@ -689,7 +691,7 @@ async function main() {
         layout: layouts.compositeBindGroupLayout,
         entries: [
           { binding: 0, resource: sampler },
-          { binding: 1, resource: textureCache.getBloomCompositeTexture(i, canvas.width, canvas.height).createView() },
+          { binding: 1, resource: textureCache.getBloomCompositeTexture(systemId, canvas.width, canvas.height).createView() },
           { binding: 2, resource: sceneTexture.createView() },
           { binding: 3, resource: { buffer: bloomIntensityBuffer } }
         ]
