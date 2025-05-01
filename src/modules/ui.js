@@ -255,6 +255,7 @@ export class ParticleUI {
     this.circleInnerRadiusValue = document.getElementById('circle-inner-radius-value');
     this.circleOuterRadiusSlider = document.getElementById('circle-outer-radius-slider');
     this.circleOuterRadiusValue = document.getElementById('circle-outer-radius-value');
+    this.circleVelocityDirectionSelect = document.getElementById('circle-velocity-direction');
     
     // Rotation controls
     this.randomRotationCheckbox = document.getElementById('random-rotation-checkbox');
@@ -799,6 +800,15 @@ export class ParticleUI {
       }
     });
     
+    // Circle velocity direction dropdown
+    this.circleVelocityDirectionSelect.addEventListener('change', this.onCircleVelocityDirectionChange = () => {
+      this.config.circleVelocityDirection = this.circleVelocityDirectionSelect.value;
+      
+      if (this.config.onRespawn) {
+        this.config.onRespawn();
+      }
+    });
+    
     // Texture checkbox listener
     if (this.textureCheckbox) {
       this.textureCheckbox.addEventListener('change', this.onTextureCheckboxChange = () => {
@@ -1067,6 +1077,11 @@ export class ParticleUI {
     if (this.onMaxRotationChange) {
       this.maxRotationSlider.removeEventListener('input', this.onMaxRotationChange);
     }
+    
+    // Circle velocity direction dropdown
+    if (this.onCircleVelocityDirectionChange) {
+      this.circleVelocityDirectionSelect.removeEventListener('change', this.onCircleVelocityDirectionChange);
+    }
   }
 
   updateUIState() {
@@ -1270,6 +1285,9 @@ export class ParticleUI {
         this.currentTextureDisplay.innerHTML = 'None';
       }
     }
+    
+    // Initialize circle velocity direction dropdown
+    this.circleVelocityDirectionSelect.value = this.config.circleVelocityDirection || 'away';
   }
 
   // Helper to convert RGB array to hex string

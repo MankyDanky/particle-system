@@ -463,10 +463,19 @@ export class ParticleSystem {
     let dirX, dirY, dirZ;
     
     if (length > 0.0001) {
-      // Normalize position to get direction
-      dirX = posX / length;
-      dirY = posY / length;
-      dirZ = posZ / length;
+      // For circle shape with tangential velocity direction
+      if (this.config.emissionShape === 'circle' && this.config.circleVelocityDirection === 'tangential') {
+        // Create a tangential direction vector (perpendicular to radius vector)
+        // For 2D circle in XY plane, tangent vector is (-y, x, 0)
+        dirX = -posY / length;
+        dirY = posX / length;
+        dirZ = 0;
+      } else {
+        // Default direction away from origin for all other shapes
+        dirX = posX / length;
+        dirY = posY / length;
+        dirZ = posZ / length;
+      }
     } else {
       // If particle is at origin, create a random direction
       const theta = Math.random() * Math.PI * 2;
@@ -899,9 +908,19 @@ export class ParticleSystem {
     let dirX, dirY, dirZ;
     
     if (length > 0.0001) {
-      dirX = posX / length;
-      dirY = posY / length;
-      dirZ = posZ / length;
+      // For circle shape with tangential velocity direction
+      if (this.config.emissionShape === 'circle' && this.config.circleVelocityDirection === 'tangential') {
+        // Create a tangential direction vector (perpendicular to radius vector)
+        // For 2D circle in XY plane, tangent vector is (-y, x, 0)
+        dirX = -posY / length;
+        dirY = posX / length;
+        dirZ = 0;
+      } else {
+        // Default direction away from origin for all shapes
+        dirX = posX / length;
+        dirY = posY / length;
+        dirZ = posZ / length;
+      }
     } else {
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
