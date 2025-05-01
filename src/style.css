@@ -309,6 +309,43 @@ input[type="range"]::-moz-range-thumb {
     align-items: center;
 }
 
+/* Custom file input styling */
+.file-input-container {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+.file-input-container input[type="file"] {
+    position: absolute;
+    font-size: 100px;
+    opacity: 0;
+    right: 0;
+    top: 0;
+    cursor: pointer;
+}
+
+.file-input-button {
+    display: inline-block;
+    background-color: #4CAF50;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 3px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+.file-input-button:hover {
+    background-color: #45a049;
+    filter: brightness(1.1);
+}
+
+.file-input-container:active .file-input-button {
+    transform: scale(0.98);
+}
+
 .texture-preview {
     width: 64px;
     height: 64px;
