@@ -41,7 +41,7 @@ export class ParticleSystem {
     
     // Create appearance uniform buffer for this specific particle system
     this.appearanceUniformBuffer = device.createBuffer({
-      size: 64, // [fadeEnabled, colorTransitionEnabled, particleSize, padding, colors...]
+      size: 64, // [fadeEnabled, colorTransitionEnabled, particleSize, textureEnabled, colors...]
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       label: "appearanceUniformBuffer"
     });
@@ -52,6 +52,9 @@ export class ParticleSystem {
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       label: "systemBloomIntensityBuffer"
     });
+    
+    // Create default texture
+    this.createDefaultTexture();
     
     // Initialize bloom intensity buffer with this system's bloom intensity
     this.updateBloomIntensity();
@@ -75,6 +78,7 @@ export class ParticleSystem {
     if (config.xVelocity === undefined) config.xVelocity = 0;
     if (config.yVelocity === undefined) config.yVelocity = 0;
     if (config.zVelocity === undefined) config.zVelocity = 0;
+    if (config.textureEnabled === undefined) config.textureEnabled = false;
     
     // Fixed timestep physics system for consistent updates
     this.fixedDeltaTime = 1.0 / 60.0; // Consistent 60Hz physics updates
@@ -93,13 +97,60 @@ export class ParticleSystem {
     // Create compute pipeline and bind group layout
     this.initComputePipeline(device);
   }
+
+  createDefaultTexture() {
+    // Create a 1x1 white texture as the default
+    const data = new Uint8Array([255, 255, 255, 255]);
+    
+    this.particleTexture = this.device.createTexture({
+      size: [1, 1],
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      label: "defaultParticleTexture"
+    });
+
+    this.device.queue.writeTexture(
+      { texture: this.particleTexture },
+      data,
+      { bytesPerRow: 4 },
+      [1, 1]
+    );
+  }
+  
+  // New method to load a texture from an ImageBitmap
+  async setTexture(imageBitmap) {
+    // Clean up previous texture if it exists and isn't the default
+    if (this.particleTexture && this.particleTexture.label !== "defaultParticleTexture") {
+      this.particleTexture.destroy();
+    }
+    
+    // Create texture from the image
+    this.particleTexture = this.device.createTexture({
+      size: [imageBitmap.width, imageBitmap.height],
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      label: "particleTexture"
+    });
+    
+    this.device.queue.copyExternalImageToTexture(
+      { source: imageBitmap },
+      { texture: this.particleTexture },
+      [imageBitmap.width, imageBitmap.height]
+    );
+    
+    // Enable texturing in the config
+    this.config.textureEnabled = true;
+    
+    // Update appearance uniform to reflect the texture being enabled
+    this.updateAppearanceUniform();
+  }
   
   updateAppearanceUniform() {
     const appearanceData = new Float32Array([
       this.config.fadeEnabled ? 1.0 : 0.0,
       this.config.colorTransitionEnabled ? 1.0 : 0.0,
       this.config.particleSize,
-      0.0, // padding
+      this.config.textureEnabled ? 1.0 : 0.0, // textureEnabled flag instead of padding
       // Single color (vec3 + padding)
       this.config.particleColor[0], this.config.particleColor[1], this.config.particleColor[2], 0.0,
       // Start color (vec3 + padding)

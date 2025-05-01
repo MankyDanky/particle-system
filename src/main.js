@@ -460,19 +460,14 @@ async function main() {
           layout: layouts.particleBindGroupLayout,
           entries: [
             { binding: 0, resource: { buffer: uniformBuffer } },
-            { binding: 1, resource: { buffer: system.appearanceUniformBuffer } }
+            { binding: 1, resource: { buffer: system.appearanceUniformBuffer } },
+            { binding: 2, resource: system.particleTexture.createView() },
+            { binding: 3, resource: sampler }
           ]
         });
       }
       
-      // Use system-specific quad buffer
-      const systemId = system.config.id;
-      if (!systemQuadBuffers[systemId]) {
-        // Create quad buffer if it doesn't exist yet
-        systemQuadBuffers[systemId] = createQuadBufferForSystem(systemId, system.config.particleSize);
-      }
-      
-      nonBloomPassEncoder.setVertexBuffer(0, systemQuadBuffers[systemId]);
+      nonBloomPassEncoder.setVertexBuffer(0, systemQuadBuffers[system.config.id]);
       nonBloomPassEncoder.setBindGroup(0, bindGroupCache.systemBindGroups[system.config.id]);
       nonBloomPassEncoder.setVertexBuffer(1, system.instanceBuffer);
       nonBloomPassEncoder.drawIndexed(6, system.activeParticles);
@@ -524,12 +519,14 @@ async function main() {
         
         bloomSystemEncoder.setVertexBuffer(0, systemQuadBuffers[systemId]);
         
-        // Create a system-specific bind group
+        // Create a system-specific bind group with all required entries
         const systemBindGroup = device.createBindGroup({
           layout: layouts.particleBindGroupLayout,
           entries: [
             { binding: 0, resource: { buffer: uniformBuffer } },
-            { binding: 1, resource: { buffer: system.appearanceUniformBuffer } }
+            { binding: 1, resource: { buffer: system.appearanceUniformBuffer } },
+            { binding: 2, resource: system.particleTexture.createView() },
+            { binding: 3, resource: sampler }
           ]
         });
         

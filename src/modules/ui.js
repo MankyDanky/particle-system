@@ -161,7 +161,7 @@ export class ParticleUI {
   }
 
   initElements() {
-    // Get UI elements
+    // Get existing UI elements
     this.lifetimeSlider = document.getElementById('lifetime-slider');
     this.lifetimeValue = document.getElementById('lifetime-value');
     this.emissionDurationSlider = document.getElementById('emission-duration-slider');
@@ -255,10 +255,16 @@ export class ParticleUI {
     this.circleInnerRadiusValue = document.getElementById('circle-inner-radius-value');
     this.circleOuterRadiusSlider = document.getElementById('circle-outer-radius-slider');
     this.circleOuterRadiusValue = document.getElementById('circle-outer-radius-value');
+    
+    // Texture controls - reference the static HTML elements
+    this.textureCheckbox = document.getElementById('texture-checkbox');
+    this.textureUploadContainer = document.getElementById('texture-upload-container');
+    this.textureFileInput = document.getElementById('texture-file-input');
+    this.currentTextureDisplay = document.getElementById('current-texture-display');
   }
 
   setupEventListeners() {
-    // Remove any existing event listeners to prevent duplicates
+    // Remove existing event listeners
     this.removeAllEventListeners();
     
     // Lifetime slider
@@ -781,9 +787,73 @@ export class ParticleUI {
         this.config.circleInnerRadius = parseFloat(this.circleInnerRadiusSlider.value);
       }
     });
+    
+    // Texture checkbox listener
+    if (this.textureCheckbox) {
+      this.textureCheckbox.addEventListener('change', this.onTextureCheckboxChange = () => {
+        this.config.textureEnabled = this.textureCheckbox.checked;
+        
+        if (this.config.textureEnabled) {
+          this.textureUploadContainer.classList.remove('hidden');
+        } else {
+          this.textureUploadContainer.classList.add('hidden');
+        }
+        
+        if (this.config.onAppearanceChange) {
+          this.config.onAppearanceChange();
+        }
+      });
+    }
+    
+    // Texture file input listener
+    if (this.textureFileInput) {
+      this.textureFileInput.addEventListener('change', this.onTextureFileChange = async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        try {
+          // Create a URL for the selected file
+          const fileUrl = URL.createObjectURL(file);
+          
+          // Create an image element to load the texture
+          const img = new Image();
+          img.onload = async () => {
+            // Create an ImageBitmap which WebGPU can use
+            const imageBitmap = await createImageBitmap(img);
+            
+            // Display a thumbnail of the texture
+            this.currentTextureDisplay.innerHTML = '';
+            const thumbnail = document.createElement('img');
+            thumbnail.src = fileUrl;
+            thumbnail.style.maxWidth = '100%';
+            thumbnail.style.maxHeight = '100%';
+            this.currentTextureDisplay.appendChild(thumbnail);
+            
+            // Enable texture in the config
+            this.config.textureEnabled = true;
+            this.textureCheckbox.checked = true;
+            this.textureUploadContainer.classList.remove('hidden');
+            
+            // Set the texture on the active particle system
+            const activeSystem = this.config.getActiveSystem?.();
+            if (activeSystem && activeSystem.setTexture) {
+              await activeSystem.setTexture(imageBitmap);
+            }
+            
+            // Update appearance uniforms
+            if (this.config.onAppearanceChange) {
+              this.config.onAppearanceChange();
+            }
+          };
+          img.src = fileUrl;
+        } catch (error) {
+          console.error('Error loading texture:', error);
+          alert('Failed to load texture. Please try a different image.');
+        }
+      });
+    }
   }
 
-  // New method to remove all event listeners to prevent duplicates
   removeAllEventListeners() {
     // Only remove if the event listeners exist
     if (this.onLifetimeChange) {
@@ -902,6 +972,14 @@ export class ParticleUI {
     }
     if (this.onZVelocityChange) {
       this.zVelocitySlider.removeEventListener('input', this.onZVelocityChange);
+    }
+    
+    // Texture event listeners
+    if (this.onTextureCheckboxChange) {
+      this.textureCheckbox.removeEventListener('change', this.onTextureCheckboxChange);
+    }
+    if (this.onTextureFileChange) {
+      this.textureFileInput.removeEventListener('change', this.onTextureFileChange);
     }
   }
 
@@ -1069,6 +1147,25 @@ export class ParticleUI {
       this.bloomIntensityContainer.classList.remove('hidden');
     } else {
       this.bloomIntensityContainer.classList.add('hidden');
+    }
+    
+    // Initialize texture UI state when switching between systems
+    if (this.textureCheckbox) {
+      this.textureCheckbox.checked = this.config.textureEnabled || false;
+      
+      if (this.config.textureEnabled) {
+        this.textureUploadContainer.classList.remove('hidden');
+      } else {
+        this.textureUploadContainer.classList.add('hidden');
+      }
+      
+      // If there's a current texture, update the display
+      const activeSystem = this.config.getActiveSystem?.();
+      if (activeSystem && activeSystem.particleTexture && activeSystem.particleTexture.label !== "defaultParticleTexture") {
+        this.currentTextureDisplay.innerHTML = '<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background-color:#888">Texture</div>';
+      } else {
+        this.currentTextureDisplay.innerHTML = 'None';
+      }
     }
   }
 

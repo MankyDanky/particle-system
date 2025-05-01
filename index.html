@@ -158,6 +158,26 @@
         <input type="range" id="bloom-intensity-slider" min="0.1" max="5.0" value="1.0" step="0.1">
         <span id="bloom-intensity-value">1.0</span>
       </div>
+      
+      <!-- Texture Controls Section -->
+      <div class="section">
+        <h4>Texture</h4>
+        <div class="checkbox-container">
+          <input type="checkbox" id="texture-checkbox">
+          <label for="texture-checkbox">Enable Texture</label>
+        </div>
+        
+        <div id="texture-upload-container" class="texture-container hidden">
+          <div class="control-row">
+            <label for="texture-file-input">Upload Texture:</label>
+            <input type="file" id="texture-file-input" accept="image/*">
+          </div>
+          <div class="control-row">
+            <label>Current Texture:</label>
+            <div id="current-texture-display" class="texture-preview">None</div>
+          </div>
+        </div>
+      </div>
     </div>
     
     <!-- Physics Tab Content -->

@@ -286,6 +286,42 @@ input[type="range"]::-moz-range-thumb {
     width: 280px;
 }
 
+/* Texture Controls Styling */
+.section {
+    margin-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    padding-top: 15px;
+}
+
+.section h4 {
+    margin: 0 0 10px 0;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.texture-container {
+    margin-top: 10px;
+}
+
+.control-row {
+    margin: 10px 0;
+    display: flex;
+    align-items: center;
+}
+
+.texture-preview {
+    width: 64px;
+    height: 64px;
+    background-color: #333;
+    border: 1px solid #555;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    font-size: 12px;
+}
+
+/* Existing styles */
 .attractor-controls {
   margin-top: 15px;
   border-top: 1px solid rgba(255, 255, 255, 0.2);

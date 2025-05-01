@@ -13,7 +13,7 @@ export const particleShader = `
     fadeEnabled: f32,
     colorTransitionEnabled: f32,
     particleSize: f32,
-    padding: f32,
+    textureEnabled: f32,
     singleColor: vec3<f32>,
     padding2: f32,
     startColor: vec3<f32>,
@@ -24,6 +24,8 @@ export const particleShader = `
 
   @binding(0) @group(0) var<uniform> uniforms : Uniforms;
   @binding(1) @group(0) var<uniform> appearance : AppearanceUniforms;
+  @binding(2) @group(0) var particleTexture: texture_2d<f32>;
+  @binding(3) @group(0) var particleSampler: sampler;
 
   struct VertexInput {
     @location(0) position : vec3<f32>,
@@ -36,6 +38,7 @@ export const particleShader = `
     @builtin(position) position : vec4<f32>,
     @location(0) color : vec3<f32>,
     @location(1) alpha : f32,
+    @location(2) texCoord : vec2<f32>,
   }
 
   @vertex
@@ -79,12 +82,21 @@ export const particleShader = `
     output.position = finalPosition;
     output.color = finalColor;
     output.alpha = alpha;
+    
+    // Convert the quad position to texture coordinates (0,0 to 1,1)
+    output.texCoord = vec2<f32>(input.position.x + 0.5, -input.position.y + 0.5);
+    
     return output;
   }
 
   @fragment
   fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(input.color, input.alpha);
+    if (appearance.textureEnabled > 0.5) {
+      let texColor = textureSample(particleTexture, particleSampler, input.texCoord);
+      return vec4<f32>(input.color * texColor.rgb, input.alpha * texColor.a);
+    } else {
+      return vec4<f32>(input.color, input.alpha);
+    }
   }
 `;
 
