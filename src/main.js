@@ -264,7 +264,7 @@ async function main() {
         activeSystem.updateAppearanceUniform();
       }
     };
-    
+        
     selectedConfig.onSpeedChange = () => {
       if (activeSystem) {
         activeSystem.updateParticleVelocities();

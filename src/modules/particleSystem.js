@@ -131,8 +131,7 @@ export class ParticleSystem {
   }
 
   updateAppearanceUniform() {
-    // Determine rotation mode flag value
-    // 0.0 = fixed, 1.0 = random, 2.0 = towards velocity
+    console.log(this.config.particleColor)
     let rotationModeValue = 0.0;
     if (this.config.rotationMode === 'random') {
       rotationModeValue = 1.0;
@@ -625,18 +624,17 @@ export class ParticleSystemManager {
         // Generate new unique ID to avoid any conflicts
         const systemId = this.systemCounter++;
         
-        // Create a new system with the loaded configuration
-        const newSystem = new ParticleSystem(this.device, {
+        // Create a shared config object that will be used by both the UI and the system
+        const sharedConfig = {
           ...systemConfig,
-          id: systemId  // Use new ID to avoid conflicts
-        });
+          id: systemId  
+        };
+        
+        const newSystem = new ParticleSystem(this.device, sharedConfig);
         
         this.particleSystems.push({
           system: newSystem,
-          config: {
-            ...systemConfig,
-            id: systemId
-          }
+          config: sharedConfig
         });
       }
       
