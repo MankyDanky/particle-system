@@ -6,6 +6,7 @@ import { createBindGroupLayouts, createRenderPipelines, createBindGroups, create
 import { createLookAtMatrix, createProjectionMatrix, multiplyMatrices, hexToRgb } from "./modules/utils.js";
 import { ParticleUI, MultiSystemUI, setupCameraControls } from "./modules/ui.js";
 import "./modules/tabs.js"; 
+import { saveScene, loadScene } from "./modules/sceneManager.js";
 
 async function main() {
   // Initialize WebGPU
@@ -397,6 +398,29 @@ async function main() {
   
   // Resize handler for window resizing
   window.addEventListener('resize', resizeCanvasToDisplaySize);
+  
+  // Save and load functionality
+  const saveButton = document.getElementById('save-scene-button');
+  const loadInput = document.getElementById('load-scene-input');
+  
+  if (saveButton) {
+    saveButton.addEventListener('click', () => saveScene(particleSystemManager));
+  }
+  
+  if (loadInput) {
+    loadInput.addEventListener('change', async (event) => {
+      try {
+        const sceneData = await loadScene(event);
+        if (sceneData) {
+          particleSystemManager.replaceSystems(sceneData);
+          multiSystemUI.updateSystemsList();
+          onSystemSelected(particleSystemManager.activeSystemIndex);
+        }
+      } catch (error) {
+        console.error("Error loading scene:", error);
+      }
+    });
+  }
   
   // Initialize particles and start animation
   particleSystemManager.respawnAllSystems();

@@ -643,6 +643,8 @@ export class ParticleUI {
       const value = this.cubeLengthSlider.value;
       this.cubeLengthValue.textContent = value;
       this.config.outerLength = parseFloat(value);
+      // Also update cubeLength to keep them synchronized
+      this.config.cubeLength = parseFloat(value);
       
       // Make sure outer length is greater than inner length
       if (this.config.outerLength <= this.config.innerLength) {

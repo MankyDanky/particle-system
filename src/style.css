@@ -456,3 +456,50 @@ input[type="range"]::-moz-range-thumb {
   font-weight: 500;
   color: #ddd;
 }
+
+/* Add file operation buttons styling */
+.file-operations {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.save-load-button {
+  background-color: #444;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s;
+}
+
+.save-load-button:hover {
+  background-color: #555;
+}
+
+.save-load-button:active {
+  background-color: #333;
+}
+
+/* File input styling */
+.custom-file-upload {
+  display: inline-block;
+  cursor: pointer;
+  background-color: #444;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  padding: 5px 10px;
+  font-size: 12px;
+  transition: background-color 0.2s;
+}
+
+.custom-file-upload:hover {
+  background-color: #555;
+}
+
+.custom-file-upload input[type="file"] {
+  display: none;
+}

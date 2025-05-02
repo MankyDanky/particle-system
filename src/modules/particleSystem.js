@@ -64,6 +64,19 @@ export class ParticleSystem {
     this.physics = new ParticlePhysics(device);
     this.textureManager = new ParticleTextureManager(device);
     
+    // Apply physics settings from the loaded config
+    if (config.gravityEnabled) {
+      this.setGravity(config.gravityStrength || 0);
+    }
+    
+    if (config.dampingEnabled) {
+      this.physics.setDamping(config.dampingStrength || 0);
+    }
+    
+    if (config.attractorEnabled && config.attractorPosition) {
+      this.setAttractor(config.attractorStrength || 0, config.attractorPosition);
+    }
+    
     // Set the current texture to the default
     this.particleTexture = this.textureManager.getDefaultTexture();
     
@@ -576,5 +589,60 @@ export class ParticleSystemManager {
     newConfig.name = `${activeConfig.name} (Copy)`;
     
     return this.createParticleSystem(newConfig);
+  }
+  
+  /**
+   * Replace all current particle systems with new ones from a saved scene
+   * @param {Object} sceneData - The loaded scene data containing systems and activeSystemIndex
+   * @returns {boolean} - Whether the replacement was successful
+   */
+  replaceSystems(sceneData) {
+    if (!sceneData || !sceneData.systems || !Array.isArray(sceneData.systems)) {
+      console.error("Invalid scene data provided");
+      return false;
+    }
+    
+    try {
+      // Clear existing systems
+      this.particleSystems = [];
+      this.systemCounter = 1; // Reset system counter to avoid ID conflicts
+      
+      // Create new systems from loaded data
+      for (const systemConfig of sceneData.systems) {
+        // Generate new unique ID to avoid any conflicts
+        const systemId = this.systemCounter++;
+        
+        // Create a new system with the loaded configuration
+        const newSystem = new ParticleSystem(this.device, {
+          ...systemConfig,
+          id: systemId  // Use new ID to avoid conflicts
+        });
+        
+        this.particleSystems.push({
+          system: newSystem,
+          config: {
+            ...systemConfig,
+            id: systemId
+          }
+        });
+      }
+      
+      // Set the active system index from loaded data
+      if (sceneData.activeSystemIndex !== undefined && 
+          sceneData.activeSystemIndex >= 0 && 
+          sceneData.activeSystemIndex < this.particleSystems.length) {
+        this.activeSystemIndex = sceneData.activeSystemIndex;
+      } else {
+        this.activeSystemIndex = 0;
+      }
+      
+      // Initialize all systems with particles
+      this.respawnAllSystems();
+      
+      return true;
+    } catch (error) {
+      console.error("Error replacing systems:", error);
+      return false;
+    }
   }
 }
