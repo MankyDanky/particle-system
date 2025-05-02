@@ -66,9 +66,9 @@ export class MultiSystemUI {
       circleOuterRadius: 2.0,
       fadeEnabled: true,
       colorTransitionEnabled: false,
-      particleColor: [1, 1, 1], // White
-      startColor: [1, 0, 0], // Red
-      endColor: [0, 0, 1], // Blue
+      particleColor: [1, 1, 1], 
+      startColor: [1, 0, 0], 
+      endColor: [0, 0, 1],
       bloomEnabled: true,
       bloomIntensity: 1.0,
       burstMode: false,
@@ -149,12 +149,6 @@ export class ParticleUI {
     this.updateUIState();
   }
 
-  // Clean up previous event listeners to prevent memory leaks and multiple handlers
-  cleanup() {
-    // Optional - only implement if needed for memory management
-    // Currently UI elements are reused rather than recreated
-  }
-
   initElements() {
     // Get existing UI elements
     this.lifetimeSlider = document.getElementById('lifetime-slider');
@@ -170,6 +164,8 @@ export class ParticleUI {
     this.burstEmissionContainer = document.getElementById('burst-emission-container');
     this.sizeSlider = document.getElementById('size-slider');
     this.sizeValue = document.getElementById('size-value');
+    this.aspectRatioSlider = document.getElementById('aspect-ratio-slider');
+    this.aspectRatioValue = document.getElementById('aspect-ratio-value');
     this.speedSlider = document.getElementById('speed-slider');
     this.speedValue = document.getElementById('speed-value');
     
@@ -550,6 +546,21 @@ export class ParticleUI {
       const value = this.sizeSlider.value;
       this.sizeValue.textContent = value;
       this.config.particleSize = parseFloat(value);
+      
+      if (this.config.onAppearanceChange) {
+        this.config.onAppearanceChange();
+      }
+      
+      if (this.config.onSizeChange) {
+        this.config.onSizeChange(this.config.particleSize);
+      }
+    });
+    
+    // Aspect ratio slider
+    this.aspectRatioSlider.addEventListener('input', this.onAspectRatioChange = () => {
+      const value = this.aspectRatioSlider.value;
+      this.aspectRatioValue.textContent = value;
+      this.config.aspectRatio = parseFloat(value);
       
       if (this.config.onAppearanceChange) {
         this.config.onAppearanceChange();
@@ -1137,6 +1148,9 @@ export class ParticleUI {
     if (this.onSizeChange) {
       this.sizeSlider.removeEventListener('input', this.onSizeChange);
     }
+    if (this.onAspectRatioChange) {
+      this.aspectRatioSlider.removeEventListener('input', this.onAspectRatioChange);
+    }
     if (this.onSpeedChange) {
       this.speedSlider.removeEventListener('input', this.onSpeedChange);
     }
@@ -1361,6 +1375,9 @@ export class ParticleUI {
     
     this.sizeSlider.value = this.config.particleSize || 0.5;
     this.sizeValue.textContent = this.config.particleSize || 0.5;
+    
+    this.aspectRatioSlider.value = this.config.aspectRatio || 1.0;
+    this.aspectRatioValue.textContent = this.config.aspectRatio || 1.0;
     
     this.speedSlider.value = this.config.particleSpeed || 1.0;
     this.speedValue.textContent = this.config.particleSpeed || 1.0;

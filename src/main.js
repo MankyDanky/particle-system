@@ -208,11 +208,15 @@ async function main() {
   const systemQuadBuffers = {};
   
   function createQuadBufferForSystem(systemId, particleSize) {
+    const aspectRatio = particleSystemManager.particleSystems.find(
+      sys => sys.config.id === systemId
+    )?.config.aspectRatio || 1.0;
+    
     const quadVertices = new Float32Array([
-      -particleSize, -particleSize, 0,
-      particleSize, -particleSize, 0,
-      particleSize, particleSize, 0,
-      -particleSize, particleSize, 0
+      -particleSize, -particleSize / aspectRatio, 0,
+      particleSize, -particleSize / aspectRatio, 0,
+      particleSize, particleSize / aspectRatio, 0,
+      -particleSize, particleSize / aspectRatio, 0
     ]);
     
     return createBuffer(

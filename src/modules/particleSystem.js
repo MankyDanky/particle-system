@@ -145,8 +145,8 @@ export class ParticleSystem {
       // End color (vec3 + padding)
       this.config.endColor[0], this.config.endColor[1], this.config.endColor[2], 
       this.config.minRotation || 0.0, // Min rotation in degrees
-      this.config.maxRotation || 90.0, // Max rotation in degrees
-      0.0 // padding
+      this.config.maxRotation || 90.0, // Max rotation in degrees 
+      this.config.aspectRatio || 1.0 // Aspect ratio (width/height)
     ]);
     
     this.device.queue.writeBuffer(this.appearanceUniformBuffer, 0, appearanceData);

@@ -21,7 +21,7 @@ export const particleShader = `
     endColor: vec3<f32>,
     minRotation: f32,
     maxRotation: f32,
-    padding: f32,
+    aspectRatio: f32,
   }
 
   @binding(0) @group(0) var<uniform> uniforms : Uniforms;
@@ -95,8 +95,11 @@ export const particleShader = `
     let rotatedX = input.position.x * cosTheta - input.position.y * sinTheta;
     let rotatedY = input.position.x * sinTheta + input.position.y * cosTheta;
     
+    // Apply the particle aspect ratio to the X coordinate
+    let finalX = rotatedX * appearance.aspectRatio;
+    
     let finalPosition = vec4<f32>(
-      viewCenter.x + rotatedX * distanceScaleFactor * uniforms.aspectRatio * viewCenter.w,
+      viewCenter.x + finalX * distanceScaleFactor * uniforms.aspectRatio * viewCenter.w,
       viewCenter.y + rotatedY * distanceScaleFactor * viewCenter.w,
       viewCenter.z,
       viewCenter.w
