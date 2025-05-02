@@ -76,6 +76,7 @@ async function main() {
     nonBloomBindGroup: null,
     bloomCompositeBindGroups: [],
     finalBindGroup: null,
+    textureStates: {},
     
     // Clear cache when textures change
     clear: function() {
@@ -86,6 +87,7 @@ async function main() {
       this.nonBloomBindGroup = null;
       this.bloomCompositeBindGroups = [];
       this.finalBindGroup = null;
+      this.textureStates = {}; // Reset texture state tracking
     }
   };
   
@@ -485,9 +487,19 @@ async function main() {
         continue;
       }
       
-      // Get or create the system-specific bind group
-      if (!bindGroupCache.systemBindGroups[system.config.id]) {
-        bindGroupCache.systemBindGroups[system.config.id] = device.createBindGroup({
+      // Check if we need to recreate the bind group due to texture changes
+      const bindGroupId = system.config.id;
+      const needsNewBindGroup = 
+        !bindGroupCache.systemBindGroups[bindGroupId] || 
+        bindGroupCache.textureStates[bindGroupId] !== config.textureEnabled;
+      
+      // Store the current texture state for future comparison
+      bindGroupCache.textureStates = bindGroupCache.textureStates || {};
+      bindGroupCache.textureStates[bindGroupId] = config.textureEnabled;
+      
+      // Create or recreate the bind group if needed
+      if (needsNewBindGroup) {
+        bindGroupCache.systemBindGroups[bindGroupId] = device.createBindGroup({
           layout: layouts.particleBindGroupLayout,
           entries: [
             { binding: 0, resource: { buffer: uniformBuffer } },
@@ -496,6 +508,7 @@ async function main() {
             { binding: 3, resource: sampler }
           ]
         });
+        
       }
       
       nonBloomPassEncoder.setVertexBuffer(0, systemQuadBuffers[system.config.id]);
@@ -550,6 +563,16 @@ async function main() {
         }
         
         bloomSystemEncoder.setVertexBuffer(0, systemQuadBuffers[systemId]);
+        
+        // Track texture state changes for bloom systems too
+        bindGroupCache.textureStates = bindGroupCache.textureStates || {};
+        
+        // Create a new bind group if needed or if texture state has changed
+        const needsNewBindGroup = !bindGroupCache.systemBindGroups[systemId] || 
+                                 bindGroupCache.textureStates[systemId] !== config.textureEnabled;
+        
+        // Update our tracking of texture state
+        bindGroupCache.textureStates[systemId] = config.textureEnabled;
         
         // Create a system-specific bind group with all required entries
         const systemBindGroup = device.createBindGroup({

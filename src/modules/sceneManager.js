@@ -103,7 +103,6 @@ export function saveScene(particleSystemManager) {
     document.body.removeChild(downloadLink);
     URL.revokeObjectURL(url);
     
-    console.log("Scene saved successfully.");
   } catch (error) {
     console.error("Error saving scene:", error);
     alert("Error saving scene. See console for details.");
@@ -153,7 +152,6 @@ export function loadScene(event) {
             activeSystemIndex: sceneData.activeSystemIndex || 0
           });
           
-          console.log("Scene loaded successfully!");
         } catch (error) {
           console.error("Error loading scene:", error);
           alert("Error loading scene: " + error.message);
