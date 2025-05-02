@@ -131,7 +131,6 @@ export class ParticleSystem {
   }
 
   updateAppearanceUniform() {
-    console.log(this.config)
     let rotationModeValue = 0.0;
     if (this.config.rotationMode === 'random') {
       rotationModeValue = 1.0;
@@ -158,7 +157,8 @@ export class ParticleSystem {
       this.config.randomSize ? 1.0 : 0.0, // randomSize flag
       this.config.minSize || 0.1, // Min particle size
       this.config.maxSize || 0.5, // Max particle size
-      this.config.fadeSizeEnabled ? 1.0 : 0.0 // Use fadeSizeEnabled flag instead of padding
+      this.config.fadeSizeEnabled ? 1.0 : 0.0, // Use fadeSizeEnabled flag
+      this.config.opacity !== undefined ? this.config.opacity : 1.0 // Particle opacity (0.0-1.0)
     ]);
     
     this.device.queue.writeBuffer(this.appearanceUniformBuffer, 0, appearanceData);

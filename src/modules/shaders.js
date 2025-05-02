@@ -26,6 +26,7 @@ export const particleShader = `
     minSize: f32,
     maxSize: f32,
     fadeSizeEnabled: f32,
+    opacity: f32,
   }
 
   @binding(0) @group(0) var<uniform> uniforms : Uniforms;
@@ -150,11 +151,19 @@ export const particleShader = `
 
   @fragment
   fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    // Apply alpha from vertex shader and multiply by opacity from appearance uniform
+    var alpha = input.alpha;
+
+    // If fade is not enabled, use the configured opacity value
+    if (appearance.fadeEnabled < 0.5 && alpha > 0.0) {
+      alpha = appearance.opacity;
+    }
+    
     if (appearance.textureEnabled > 0.5) {
       let texColor = textureSample(particleTexture, particleSampler, input.texCoord);
-      return vec4<f32>(input.color * texColor.rgb, input.alpha * texColor.a);
+      return vec4<f32>(input.color * texColor.rgb, alpha * texColor.a);
     } else {
-      return vec4<f32>(input.color, input.alpha);
+      return vec4<f32>(input.color, alpha);
     }
   }
 `;
@@ -387,9 +396,9 @@ export const particlePhysicsShader = `
       modifiedVelocity *= dampingFactor;
     }
     
-    // Apply gravity if enabled (gravity value > 0)
-    if (physics.gravity > 0.0) {
-      // Apply downward force - reduce Y component of velocity
+    // Apply gravity if enabled (non-zero gravity value)
+    if (physics.gravity != 0.0) {
+      // Apply gravity force - negative gravity will cause particles to float up
       modifiedVelocity.y -= physics.gravity * physics.deltaTime;
     }
     

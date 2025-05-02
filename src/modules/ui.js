@@ -186,6 +186,12 @@ export class ParticleUI {
     
     // Appearance tab elements
     this.fadeCheckbox = document.getElementById('fade-checkbox');
+    
+    // Opacity slider elements
+    this.opacitySlider = document.getElementById('opacity-slider');
+    this.opacityValue = document.getElementById('opacity-value');
+    this.opacitySliderContainer = document.getElementById('opacity-slider-container');
+    
     this.colorTransitionCheckbox = document.getElementById('color-transition-checkbox');
     this.particleColorInput = document.getElementById('particle-color');
     this.startColorInput = document.getElementById('start-color');
@@ -323,6 +329,17 @@ export class ParticleUI {
     // Fade size checkbox
     this.fadeSizeCheckbox.addEventListener('change', this.onFadeSizeChange = () => {
       this.config.fadeSizeEnabled = this.fadeSizeCheckbox.checked;
+      
+      if (this.config.onAppearanceChange) {
+        this.config.onAppearanceChange();
+      }
+    });
+    
+    // Opacity slider
+    this.opacitySlider.addEventListener('input', this.onOpacityChange = () => {
+      const value = this.opacitySlider.value;
+      this.opacityValue.textContent = value;
+      this.config.opacity = parseFloat(value);
       
       if (this.config.onAppearanceChange) {
         this.config.onAppearanceChange();
@@ -505,6 +522,13 @@ export class ParticleUI {
     // Fade checkbox
     this.fadeCheckbox.addEventListener('change', this.onFadeChange = () => {
       this.config.fadeEnabled = this.fadeCheckbox.checked;
+      
+      // Show/hide opacity slider based on fade state
+      if (this.config.fadeEnabled) {
+        this.opacitySliderContainer.classList.add('hidden');
+      } else {
+        this.opacitySliderContainer.classList.remove('hidden');
+      }
       
       if (this.config.onAppearanceChange) {
         this.config.onAppearanceChange();
@@ -1394,6 +1418,11 @@ export class ParticleUI {
     if (this.onFadeSizeChange) {
       this.fadeSizeCheckbox.removeEventListener('change', this.onFadeSizeChange);
     }
+    
+    // Opacity slider
+    if (this.onOpacityChange) {
+      this.opacitySlider.removeEventListener('input', this.onOpacityChange);
+    }
   }
 
   updateUIState() {
@@ -1686,6 +1715,17 @@ export class ParticleUI {
     
     // Initialize fade size checkbox
     this.fadeSizeCheckbox.checked = this.config.fadeSizeEnabled || false;
+    
+    // Initialize opacity slider
+    this.opacitySlider.value = this.config.opacity !== undefined ? this.config.opacity : 1.0;
+    this.opacityValue.textContent = this.config.opacity !== undefined ? this.config.opacity : 1.0;
+    
+    // Show/hide opacity slider based on fade state
+    if (this.config.fadeEnabled) {
+      this.opacitySliderContainer.classList.add('hidden');
+    } else {
+      this.opacitySliderContainer.classList.remove('hidden');
+    }
   }
 
   // Method to remove texture from the current system

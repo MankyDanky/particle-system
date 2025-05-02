@@ -57,7 +57,7 @@ export function saveScene(particleSystemManager) {
         shapeRotationY: config.shapeRotationY,
         shapeRotationZ: config.shapeRotationZ,
         rotation: config.rotation,
-        rotationMode: config.rotationMode,  // Save rotation mode instead of randomRotation
+        rotationMode: config.rotationMode, 
         minRotation: config.minRotation,
         maxRotation: config.maxRotation,
         overrideXVelocity: config.overrideXVelocity,
@@ -76,6 +76,7 @@ export function saveScene(particleSystemManager) {
         minSize: config.minSize,
         maxSize: config.maxSize,
         fadeSizeEnabled: config.fadeSizeEnabled,
+        opacity: config.opacity
       })),
       activeSystemIndex: particleSystemManager.activeSystemIndex
     };
