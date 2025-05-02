@@ -597,8 +597,23 @@ export class ParticleSystemManager {
     if (this.particleSystems.length === 0) return -1;
     
     const activeConfig = this.getActiveConfig();
+    
+    // Create a deep copy of the config but reset all callback functions
     const newConfig = JSON.parse(JSON.stringify(activeConfig));
     newConfig.name = `${activeConfig.name} (Copy)`;
+    
+    // Reset all callback functions to ensure they don't affect the original system
+    newConfig.onAppearanceChange = null;
+    newConfig.onColorChange = null;
+    newConfig.onSizeChange = null;
+    newConfig.onSpeedChange = null;
+    newConfig.onPhysicsChange = null;
+    newConfig.onBloomIntensityChange = null;
+    newConfig.onRespawn = null;
+    newConfig.getActiveSystem = null;
+    
+    // Make sure we get a fresh ID for the new system
+    delete newConfig.id;
     
     return this.createParticleSystem(newConfig);
   }
