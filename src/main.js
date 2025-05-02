@@ -265,10 +265,6 @@ async function main() {
       }
     };
     
-    selectedConfig.onSizeChange = (size) => {
-      console.log("Size changed to:", size);
-    };
-    
     selectedConfig.onSpeedChange = () => {
       if (activeSystem) {
         activeSystem.updateParticleVelocities();

@@ -561,10 +561,6 @@ export class ParticleUI {
       if (this.config.onAppearanceChange) {
         this.config.onAppearanceChange();
       }
-      
-      if (this.config.onSizeChange) {
-        this.config.onSizeChange(this.config.particleSize);
-      }
     });
     
     // Aspect ratio slider
@@ -575,10 +571,6 @@ export class ParticleUI {
       
       if (this.config.onAppearanceChange) {
         this.config.onAppearanceChange();
-      }
-      
-      if (this.config.onSizeChange) {
-        this.config.onSizeChange(this.config.particleSize);
       }
     });
     

@@ -131,7 +131,6 @@ export class ParticleSystem {
   }
 
   updateAppearanceUniform() {
-    console.log(this.config.particleSize, this.config.minSize, this.config.maxSize);
     const appearanceData = new Float32Array([
       this.config.fadeEnabled ? 1.0 : 0.0,
       this.config.colorTransitionEnabled ? 1.0 : 0.0,

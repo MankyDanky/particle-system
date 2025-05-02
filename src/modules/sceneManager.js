@@ -72,6 +72,9 @@ export function saveScene(particleSystemManager) {
         cylinderOuterRadius: config.cylinderOuterRadius,
         cylinderHeight: config.cylinderHeight,
         aspectRatio: config.aspectRatio,
+        randomSize: config.randomSize,
+        minSize: config.minSize,
+        maxSize: config.maxSize,
       })),
       activeSystemIndex: particleSystemManager.activeSystemIndex
     };
