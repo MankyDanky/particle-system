@@ -150,7 +150,7 @@ export class ParticleSystem {
       this.config.randomSize ? 1.0 : 0.0, // randomSize flag
       this.config.minSize || 0.1, // Min particle size
       this.config.maxSize || 0.5, // Max particle size
-      0.0 // padding
+      this.config.fadeSizeEnabled ? 1.0 : 0.0 // Use fadeSizeEnabled flag instead of padding
     ]);
     
     this.device.queue.writeBuffer(this.appearanceUniformBuffer, 0, appearanceData);

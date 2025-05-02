@@ -303,10 +303,10 @@ async function main() {
     };
     
     // Initialize appearance uniform buffer for this system
-    updateAppearanceUniform(selectedConfig);
+    activeSystem.updateAppearanceUniform();
     
     // Update bloom intensity
-    updateBloomIntensity(selectedConfig);
+    activeSystem.updateBloomIntensity();
     
     // Update Respawn All button to respawn all systems
     const respawnButton = document.getElementById('respawn-button');
@@ -825,44 +825,6 @@ async function main() {
     };
     
     requestAnimationFrame(waitForNextFrame);
-  }
-  
-  // Function to update appearance settings in the uniform buffer
-  function updateAppearanceUniform(systemConfig) {
-    if (!systemConfig) return;
-    
-    const appearanceData = new Float32Array([
-      systemConfig.fadeEnabled ? 1.0 : 0.0,
-      systemConfig.colorTransitionEnabled ? 1.0 : 0.0,
-      systemConfig.particleSize,
-      systemConfig.textureEnabled ? 1.0 : 0.0, // textureEnabled flag
-      // Single color (vec3 + padding)
-      systemConfig.particleColor[0], systemConfig.particleColor[1], systemConfig.particleColor[2], 
-      systemConfig.rotation || 0.0, // Fixed rotation in degrees
-      // Start color (vec3 + padding)
-      systemConfig.startColor[0], systemConfig.startColor[1], systemConfig.startColor[2], 
-      systemConfig.randomRotation ? 1.0 : 0.0, // randomRotation flag
-      // End color (vec3 + padding)
-      systemConfig.endColor[0], systemConfig.endColor[1], systemConfig.endColor[2], 
-      systemConfig.minRotation || 0.0, // Min rotation in degrees
-      systemConfig.maxRotation || 90.0, // Max rotation in degrees 
-      systemConfig.aspectRatio || 1.0, // Aspect ratio (width/height)
-      systemConfig.randomSize ? 1.0 : 0.0, // randomSize flag
-      systemConfig.minSize || 0.1, // Min particle size
-      systemConfig.maxSize || 0.5, // Max particle size
-      0.0 // padding
-    ]);
-    
-    device.queue.writeBuffer(appearanceUniformBuffer, 0, appearanceData);
-  }
-  
-  // Function to update bloom intensity
-  function updateBloomIntensity(systemConfig) {
-    if (!systemConfig) return;
-    
-    const bloomIntensityData = new Float32Array(16).fill(0);
-    bloomIntensityData[0] = systemConfig.bloomIntensity;
-    device.queue.writeBuffer(bloomIntensityBuffer, 0, bloomIntensityData);
   }
 }
 

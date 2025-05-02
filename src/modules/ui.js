@@ -65,6 +65,7 @@ export class MultiSystemUI {
       circleInnerRadius: 0.0,
       circleOuterRadius: 2.0,
       fadeEnabled: true,
+      fadeSizeEnabled: false,
       colorTransitionEnabled: false,
       particleColor: [1, 1, 1], 
       startColor: [1, 0, 0], 
@@ -176,6 +177,9 @@ export class ParticleUI {
     this.minSizeValue = document.getElementById('min-size-value');
     this.maxSizeSlider = document.getElementById('max-size-slider');
     this.maxSizeValue = document.getElementById('max-size-value');
+
+    // Fade size checkbox
+    this.fadeSizeCheckbox = document.getElementById('fade-size-checkbox');
     
     // Get the size slider container (the parent element of the size slider)
     this.sizeSliderContainer = this.sizeSlider.closest('.slider-container');
@@ -314,6 +318,15 @@ export class ParticleUI {
       const value = this.lifetimeSlider.value;
       this.lifetimeValue.textContent = `${value} sec`;
       this.config.lifetime = parseFloat(value);
+    });
+
+    // Fade size checkbox
+    this.fadeSizeCheckbox.addEventListener('change', this.onFadeSizeChange = () => {
+      this.config.fadeSizeEnabled = this.fadeSizeCheckbox.checked;
+      
+      if (this.config.onAppearanceChange) {
+        this.config.onAppearanceChange();
+      }
     });
     
     // Emission duration slider
@@ -1373,6 +1386,11 @@ export class ParticleUI {
     if (this.onMaxSizeChange) {
       this.maxSizeSlider.removeEventListener('input', this.onMaxSizeChange);
     }
+    
+    // Fade size checkbox
+    if (this.onFadeSizeChange) {
+      this.fadeSizeCheckbox.removeEventListener('change', this.onFadeSizeChange);
+    }
   }
 
   updateUIState() {
@@ -1662,6 +1680,9 @@ export class ParticleUI {
       // Show the particle size slider when random size is disabled
       this.sizeSliderContainer.classList.remove('hidden');
     }
+    
+    // Initialize fade size checkbox
+    this.fadeSizeCheckbox.checked = this.config.fadeSizeEnabled || false;
   }
 
   // Method to remove texture from the current system

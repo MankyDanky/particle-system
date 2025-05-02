@@ -25,7 +25,7 @@ export const particleShader = `
     randomSize: f32,
     minSize: f32,
     maxSize: f32,
-    padding: f32,
+    fadeSizeEnabled: f32,
   }
 
   @binding(0) @group(0) var<uniform> uniforms : Uniforms;
@@ -82,6 +82,12 @@ export const particleShader = `
       particleSizeFactor = appearance.minSize + 
         fract(sin(lifetime * 54321.67) * 43758.5453) * 
         (appearance.maxSize - appearance.minSize);
+    }
+    
+    // Apply size fading if enabled
+    if (appearance.fadeSizeEnabled > 0.5) {
+      // Shrink the particle as it ages (from full size to 0)
+      particleSizeFactor *= (1.0 - lifeRatio);
     }
     
     let cameraToParticle = length(center - uniforms.cameraPosition);

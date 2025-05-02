@@ -75,6 +75,7 @@ export function saveScene(particleSystemManager) {
         randomSize: config.randomSize,
         minSize: config.minSize,
         maxSize: config.maxSize,
+        fadeSizeEnabled: config.fadeSizeEnabled,
       })),
       activeSystemIndex: particleSystemManager.activeSystemIndex
     };
