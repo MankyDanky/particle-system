@@ -165,6 +165,17 @@ export function createRenderPipelines(device, format, layouts) {
               format: 'float32x2',
             }
           ],
+        },
+        {
+          arrayStride: 4 * 4, // vec3 velocity + padding
+          stepMode: 'instance',
+          attributes: [
+            {
+              shaderLocation: 4,
+              offset: 0,
+              format: 'float32x3',
+            }
+          ],
         }
       ],
     },

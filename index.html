@@ -175,9 +175,13 @@
       <!-- Rotation Controls Section -->
       <div class="rotation-controls">
         <h4>Particle Rotation</h4>
-        <div class="checkbox-container">
-          <input type="checkbox" id="random-rotation-checkbox">
-          <label for="random-rotation-checkbox">Use Random Rotation</label>
+        <div class="dropdown-container">
+          <label for="rotation-mode">Rotation Mode:</label>
+          <select id="rotation-mode">
+            <option value="fixed">Fixed Rotation</option>
+            <option value="random">Random Rotation</option>
+            <option value="velocity">Towards Velocity</option>
+          </select>
         </div>
         
         <div id="fixed-rotation-container">

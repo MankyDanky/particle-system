@@ -57,7 +57,7 @@ export function saveScene(particleSystemManager) {
         shapeRotationY: config.shapeRotationY,
         shapeRotationZ: config.shapeRotationZ,
         rotation: config.rotation,
-        randomRotation: config.randomRotation,
+        rotationMode: config.rotationMode,  // Save rotation mode instead of randomRotation
         minRotation: config.minRotation,
         maxRotation: config.maxRotation,
         overrideXVelocity: config.overrideXVelocity,

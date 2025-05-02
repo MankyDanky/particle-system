@@ -89,7 +89,7 @@ async function main() {
     }
   };
   
-  // Initialize configuration state for the first particle system
+  // Update config to initialize rotationMode
   const config = {
     // Camera control settings
     cameraRotationX: 0,
@@ -160,7 +160,7 @@ async function main() {
     
     // Rotation settings
     rotation: 0,
-    randomRotation: false,
+    rotationMode: 'fixed',
     minRotation: 0,
     maxRotation: 90,
     
@@ -501,6 +501,7 @@ async function main() {
       nonBloomPassEncoder.setVertexBuffer(0, systemQuadBuffers[system.config.id]);
       nonBloomPassEncoder.setBindGroup(0, bindGroupCache.systemBindGroups[system.config.id]);
       nonBloomPassEncoder.setVertexBuffer(1, system.instanceBuffer);
+      nonBloomPassEncoder.setVertexBuffer(2, system.velocityBuffer); // Add velocity buffer to shader
       nonBloomPassEncoder.drawIndexed(6, system.activeParticles);
     }
     
@@ -563,6 +564,7 @@ async function main() {
         
         bloomSystemEncoder.setBindGroup(0, systemBindGroup);
         bloomSystemEncoder.setVertexBuffer(1, system.instanceBuffer);
+        bloomSystemEncoder.setVertexBuffer(2, system.velocityBuffer); // Add velocity buffer to the bloom shader
         bloomSystemEncoder.drawIndexed(6, system.activeParticles);
         bloomSystemEncoder.end();
         

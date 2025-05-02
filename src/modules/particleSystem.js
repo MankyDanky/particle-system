@@ -32,7 +32,7 @@ export class ParticleSystem {
     // Create GPU buffers for compute shader
     this.velocityBuffer = device.createBuffer({
       size: this.MAX_PARTICLES * 4 * 4, // vec3 + padding
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
       label: "particleVelocityBuffer"
     });
     
@@ -131,6 +131,15 @@ export class ParticleSystem {
   }
 
   updateAppearanceUniform() {
+    // Determine rotation mode flag value
+    // 0.0 = fixed, 1.0 = random, 2.0 = towards velocity
+    let rotationModeValue = 0.0;
+    if (this.config.rotationMode === 'random') {
+      rotationModeValue = 1.0;
+    } else if (this.config.rotationMode === 'velocity') {
+      rotationModeValue = 2.0;
+    }
+    
     const appearanceData = new Float32Array([
       this.config.fadeEnabled ? 1.0 : 0.0,
       this.config.colorTransitionEnabled ? 1.0 : 0.0,
@@ -141,7 +150,7 @@ export class ParticleSystem {
       this.config.rotation || 0.0, // Fixed rotation in degrees
       // Start color (vec3 + padding)
       this.config.startColor[0], this.config.startColor[1], this.config.startColor[2], 
-      this.config.randomRotation ? 1.0 : 0.0, // randomRotation flag
+      rotationModeValue, // Rotation mode: 0=fixed, 1=random, 2=velocity
       // End color (vec3 + padding)
       this.config.endColor[0], this.config.endColor[1], this.config.endColor[2], 
       this.config.minRotation || 0.0, // Min rotation in degrees

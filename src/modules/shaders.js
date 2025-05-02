@@ -17,7 +17,7 @@ export const particleShader = `
     singleColor: vec3<f32>,
     rotation: f32,
     startColor: vec3<f32>,
-    randomRotation: f32,
+    rotationMode: f32,  // 0=fixed, 1=random, 2=towards velocity
     endColor: vec3<f32>,
     minRotation: f32,
     maxRotation: f32,
@@ -38,6 +38,7 @@ export const particleShader = `
     @location(1) particlePosition : vec3<f32>,
     @location(2) particleColor : vec3<f32>,
     @location(3) particleAgeAndLife : vec2<f32>,
+    @location(4) particleVelocity : vec3<f32>,  // Add velocity as input
   }
 
   struct VertexOutput {
@@ -96,12 +97,24 @@ export const particleShader = `
     
     // Create a unique rotation value for each particle
     var particleRotation = appearance.rotation;
-    if (appearance.randomRotation > 0.5) {
+    if (appearance.rotationMode == 1.0) {
       // Use the particle's lifetime as a seed to create a consistent random rotation
       // between minRotation and maxRotation
       particleRotation = appearance.minRotation + 
         fract(sin(lifetime * 12345.67) * 43758.5453) * 
         (appearance.maxRotation - appearance.minRotation);
+    } else if (appearance.rotationMode == 2.0) {
+      // Calculate rotation based on velocity direction in screen space
+      // Transform velocity from world to view space to get correct orientation
+      let viewVelocity = (uniforms.transform * vec4<f32>(input.particleVelocity, 0.0)).xyz;
+      
+      // Calculate the angle from the transformed velocity
+      // We only care about the XY plane in screen space
+      if (length(viewVelocity.xy) > 0.001) {
+        particleRotation = atan2(viewVelocity.y, viewVelocity.x) * 57.295779513; // Radians to degrees
+        // Add 90 degrees to align the particle with its direction of motion
+        particleRotation += 90.0;
+      }
     }
     
     // Convert rotation from degrees to radians
