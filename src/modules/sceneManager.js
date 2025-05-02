@@ -70,7 +70,8 @@ export function saveScene(particleSystemManager) {
         cylinderVelocityDirection: config.cylinderVelocityDirection,
         cylinderInnerRadius: config.cylinderInnerRadius,
         cylinderOuterRadius: config.cylinderOuterRadius,
-        cylinderHeight: config.cylinderHeight
+        cylinderHeight: config.cylinderHeight,
+        aspectRatio: config.aspectRatio,
       })),
       activeSystemIndex: particleSystemManager.activeSystemIndex
     };
