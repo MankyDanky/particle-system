@@ -465,39 +465,34 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .save-load-button {
-  background-color: #444;
+  background-color: #4CAF50;;
   color: white;
   border: none;
   border-radius: 3px;
   padding: 5px 10px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: normal;
+  width: 115px;
   transition: background-color 0.2s;
 }
 
-.save-load-button:hover {
-  background-color: #555;
-}
-
-.save-load-button:active {
-  background-color: #333;
-}
 
 /* File input styling */
 .custom-file-upload {
   display: inline-block;
   cursor: pointer;
-  background-color: #444;
+  background-color: #4CAF50;
+  text-align: center;
+  font-size: 13px;
+  font-weight: normal;
   color: white;
   border: none;
   border-radius: 3px;
   padding: 5px 10px;
-  font-size: 12px;
+  width: 115px;
+  box-sizing: border-box;
   transition: background-color 0.2s;
-}
-
-.custom-file-upload:hover {
-  background-color: #555;
 }
 
 .custom-file-upload input[type="file"] {
