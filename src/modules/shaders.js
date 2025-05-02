@@ -120,19 +120,19 @@ export const particleShader = `
     // Convert rotation from degrees to radians
     let rotRadians = particleRotation * 0.01745329252; // PI/180
     
-    // Create a rotation matrix for 2D rotation in screen space
+    // First apply the aspect ratio to the input position (before rotation)
+    let scaledX = input.position.x * appearance.aspectRatio;
+    let scaledY = input.position.y;
+    
+    // Then apply rotation to the scaled position
     let cosTheta = cos(rotRadians);
     let sinTheta = sin(rotRadians);
     
-    // Apply rotation to the vertex position before scaling and positioning
-    let rotatedX = input.position.x * cosTheta - input.position.y * sinTheta;
-    let rotatedY = input.position.x * sinTheta + input.position.y * cosTheta;
-    
-    // Apply the particle aspect ratio to the X coordinate
-    let finalX = rotatedX * appearance.aspectRatio;
+    let rotatedX = scaledX * cosTheta - scaledY * sinTheta;
+    let rotatedY = scaledX * sinTheta + scaledY * cosTheta;
     
     let finalPosition = vec4<f32>(
-      viewCenter.x + finalX * distanceScaleFactor * uniforms.aspectRatio * viewCenter.w,
+      viewCenter.x + rotatedX * distanceScaleFactor * uniforms.aspectRatio * viewCenter.w,
       viewCenter.y + rotatedY * distanceScaleFactor * viewCenter.w,
       viewCenter.z,
       viewCenter.w
