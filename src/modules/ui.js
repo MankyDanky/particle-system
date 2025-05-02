@@ -1,8 +1,4 @@
-/**
- * UI module for handling user interface interactions
- */
-
-import { hexToRgb } from './utils.js';
+import { hexToRgb, rgbToHex } from './utils.js';
 
 // Updated MultiSystemUI class to use existing HTML elements
 export class MultiSystemUI {
@@ -16,7 +12,6 @@ export class MultiSystemUI {
   }
 
   setupEventListeners() {
-    // Add event listeners for the buttons
     document.getElementById('add-system-button').addEventListener('click', () => this.addNewSystem());
     document.getElementById('duplicate-system-button').addEventListener('click', () => this.duplicateSystem());
     document.getElementById('delete-system-button').addEventListener('click', () => this.deleteSystem());
@@ -1417,9 +1412,9 @@ export class ParticleUI {
     this.colorTransitionCheckbox.checked = this.config.colorTransitionEnabled;
     this.burstCheckbox.checked = this.config.burstMode;
     
-    this.particleColorInput.value = this.rgbToHex(this.config.particleColor);
-    this.startColorInput.value = this.rgbToHex(this.config.startColor);
-    this.endColorInput.value = this.rgbToHex(this.config.endColor);
+    this.particleColorInput.value = rgbToHex(this.config.particleColor);
+    this.startColorInput.value = rgbToHex(this.config.startColor);
+    this.endColorInput.value = rgbToHex(this.config.endColor);
     
     this.emissionShapeSelect.value = this.config.emissionShape;
     this.cubeLengthSlider.value = this.config.cubeLength;
@@ -1566,54 +1561,6 @@ export class ParticleUI {
     this.shapeRotationZValue.textContent = `${this.config.shapeRotationZ || 0}°`;
   }
 
-  // Helper to convert RGB array to hex string
-  rgbToHex(rgb) {
-    if (!rgb) return '#ffffff';
-    
-    const r = Math.round(rgb[0] * 255).toString(16).padStart(2, '0');
-    const g = Math.round(rgb[1] * 255).toString(16).padStart(2, '0');
-    const b = Math.round(rgb[2] * 255).toString(16).padStart(2, '0');
-    
-    return `#${r}${g}${b}`;
-  }
-
-  // Helper method to display a texture preview when switching systems
-  displayTexturePreview(texture) {
-    // Clear previous content
-    this.currentTextureDisplay.innerHTML = '';
-    
-    // Create a container for the texture and remove button
-    const container = document.createElement('div');
-    container.className = 'texture-thumbnail-container';
-    
-    // Create a thumbnail to show the texture
-    const thumbnail = document.createElement('div');
-    thumbnail.className = 'texture-thumbnail';
-    
-    // Get the active system to access its texture
-    const activeSystem = this.config.getActiveSystem?.();
-    if (activeSystem && activeSystem.particleTexture) {
-      // Store the texture URL if it was uploaded by the user
-      if (this.lastUploadedTextureUrl) {
-        // If we have a saved URL from the last upload, use it
-        const img = document.createElement('img');
-        img.src = this.lastUploadedTextureUrl;
-        thumbnail.appendChild(img);
-      }
-    }
-    
-    // Add a remove button
-    const removeBtn = document.createElement('button');
-    removeBtn.textContent = 'Remove Texture';
-    removeBtn.className = 'button small-button texture-remove-button';
-    removeBtn.addEventListener('click', () => this.removeTexture());
-    
-    container.appendChild(thumbnail);
-    container.appendChild(removeBtn);
-    
-    this.currentTextureDisplay.appendChild(container);
-  }
-  
   // Method to remove texture from the current system
   removeTexture() {
     const activeSystem = this.config.getActiveSystem?.();
@@ -1668,41 +1615,4 @@ export class ParticleUI {
       }
     }
   }
-}
-
-export function setupCameraControls(canvas, config) {
-  // Camera control event listeners
-  canvas.addEventListener('mousedown', (e) => {
-    config.isDragging = true;
-    config.lastMouseX = e.clientX;
-    config.lastMouseY = e.clientY;
-  });
-  
-  window.addEventListener('mouseup', () => {
-    config.isDragging = false;
-  });
-  
-  window.addEventListener('mousemove', (e) => {
-    if (config.isDragging) {
-      const deltaX = e.clientX - config.lastMouseX;
-      const deltaY = e.clientY - config.lastMouseY;
-      
-      config.cameraRotationY -= deltaX * config.rotationSpeed;
-      config.cameraRotationX += deltaY * config.rotationSpeed;
-      
-      // Limit vertical rotation to prevent flipping
-      config.cameraRotationX = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, config.cameraRotationX));
-      
-      config.lastMouseX = e.clientX;
-      config.lastMouseY = e.clientY;
-    }
-  });
-  
-  // Zoom control
-  canvas.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    
-    const zoomAmount = e.deltaY * 0.01;
-    config.cameraDistance = Math.max(config.minZoom, Math.min(config.maxZoom, config.cameraDistance + zoomAmount));
-  }, { passive: false });
 }

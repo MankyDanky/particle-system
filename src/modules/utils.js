@@ -10,6 +10,17 @@ export function hexToRgb(hex) {
   return [r, g, b];
 }
 
+// Convert RGB [0-1] to hex color
+export function rgbToHex(rgb) {
+  if (!rgb) return '#ffffff';
+  
+  const r = Math.round(rgb[0] * 255).toString(16).padStart(2, '0');
+  const g = Math.round(rgb[1] * 255).toString(16).padStart(2, '0');
+  const b = Math.round(rgb[2] * 255).toString(16).padStart(2, '0');
+  
+  return `#${r}${g}${b}`;
+}
+
 // Matrix and vector operations
 export function createLookAtMatrix(eye, target, up) {
   const zAxis = normalizeVector([

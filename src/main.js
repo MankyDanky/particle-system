@@ -4,7 +4,8 @@ import { initWebGPU, createRenderTextures, createDepthTexture, createBuffer } fr
 import { ParticleSystem, ParticleSystemManager } from "./modules/particleSystem.js";
 import { createBindGroupLayouts, createRenderPipelines, createBindGroups, createSampler } from "./modules/renderers.js";
 import { createLookAtMatrix, createProjectionMatrix, multiplyMatrices, hexToRgb } from "./modules/utils.js";
-import { ParticleUI, MultiSystemUI, setupCameraControls } from "./modules/ui.js";
+import { ParticleUI, MultiSystemUI} from "./modules/ui.js";
+import { setupCameraControls } from "./modules/cameraControls.js";
 import "./modules/tabs.js"; 
 import { saveScene, loadScene } from "./modules/sceneManager.js";
 
