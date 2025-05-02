@@ -203,7 +203,7 @@ export function createRenderPipelines(device, format, layouts) {
       cullMode: 'none',
     },
     depthStencil: {
-      depthWriteEnabled: false,
+      depthWriteEnabled: true,
       depthCompare: 'less',
       format: 'depth24plus',
     },
