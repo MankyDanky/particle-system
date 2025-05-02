@@ -131,7 +131,7 @@ export class ParticleSystem {
   }
 
   updateAppearanceUniform() {
-    console.log(this.config.particleColor)
+    console.log(this.config)
     let rotationModeValue = 0.0;
     if (this.config.rotationMode === 'random') {
       rotationModeValue = 1.0;
