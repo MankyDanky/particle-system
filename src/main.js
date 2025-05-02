@@ -127,6 +127,11 @@ async function main() {
     particleSize: 0.5,
     particleSpeed: 1.0,
     
+    // Random size settings
+    randomSize: false,
+    minSize: 0.1,
+    maxSize: 0.5,
+    
     // Physics settings
     dampingEnabled: false,
     dampingStrength: 0.5,
@@ -213,10 +218,10 @@ async function main() {
     )?.config.aspectRatio || 1.0;
     
     const quadVertices = new Float32Array([
-      -particleSize, -particleSize / aspectRatio, 0,
-      particleSize, -particleSize / aspectRatio, 0,
-      particleSize, particleSize / aspectRatio, 0,
-      -particleSize, particleSize / aspectRatio, 0
+      -0.5, -0.5 / aspectRatio, 0,
+      0.5, -0.5 / aspectRatio, 0,
+      0.5, 0.5 / aspectRatio, 0,
+      -0.5, 0.5 / aspectRatio, 0
     ]);
     
     return createBuffer(
@@ -261,23 +266,7 @@ async function main() {
     };
     
     selectedConfig.onSizeChange = (size) => {
-      // Update the quad buffer for this specific system only
-      const systemId = selectedConfig.id;
-      
-      // Create or update this system's quad buffer
-      if (!systemQuadBuffers[systemId]) {
-        systemQuadBuffers[systemId] = createQuadBufferForSystem(systemId, size);
-      } else {
-        // Update existing buffer with new size
-        const newQuadVertices = new Float32Array([
-          -size, -size, 0,
-          size, -size, 0,
-          size, size, 0,
-          -size, size, 0
-        ]);
-        
-        device.queue.writeBuffer(systemQuadBuffers[systemId], 0, newQuadVertices);
-      }
+      console.log("Size changed to:", size);
     };
     
     selectedConfig.onSpeedChange = () => {
@@ -861,6 +850,10 @@ async function main() {
       systemConfig.endColor[0], systemConfig.endColor[1], systemConfig.endColor[2], 
       systemConfig.minRotation || 0.0, // Min rotation in degrees
       systemConfig.maxRotation || 90.0, // Max rotation in degrees 
+      systemConfig.aspectRatio || 1.0, // Aspect ratio (width/height)
+      systemConfig.randomSize ? 1.0 : 0.0, // randomSize flag
+      systemConfig.minSize || 0.1, // Min particle size
+      systemConfig.maxSize || 0.5, // Max particle size
       0.0 // padding
     ]);
     

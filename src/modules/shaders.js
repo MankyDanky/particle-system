@@ -22,6 +22,10 @@ export const particleShader = `
     minRotation: f32,
     maxRotation: f32,
     aspectRatio: f32,
+    randomSize: f32,
+    minSize: f32,
+    maxSize: f32,
+    padding: f32,
   }
 
   @binding(0) @group(0) var<uniform> uniforms : Uniforms;
@@ -70,8 +74,18 @@ export const particleShader = `
     
     let viewCenter = uniforms.transform * vec4<f32>(center, 1.0);
     
+    // Determine particle size - use random size if enabled
+    var particleSizeFactor = appearance.particleSize;
+    if (appearance.randomSize > 0.5) {
+      // Use the particle's lifetime as a seed to create a consistent random size
+      // between minSize and maxSize, similar to how random rotation works
+      particleSizeFactor = appearance.minSize + 
+        fract(sin(lifetime * 54321.67) * 43758.5453) * 
+        (appearance.maxSize - appearance.minSize);
+    }
+    
     let cameraToParticle = length(center - uniforms.cameraPosition);
-    let baseScaleFactor = 0.15 * appearance.particleSize;
+    let baseScaleFactor = 0.15 * particleSizeFactor;
     let distanceScaleFactor = baseScaleFactor * (10.0 / cameraToParticle);
     
     // Create a unique rotation value for each particle

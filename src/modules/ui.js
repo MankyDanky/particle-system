@@ -169,6 +169,17 @@ export class ParticleUI {
     this.speedSlider = document.getElementById('speed-slider');
     this.speedValue = document.getElementById('speed-value');
     
+    // Random size UI elements
+    this.randomSizeCheckbox = document.getElementById('random-size-checkbox');
+    this.randomSizeContainer = document.getElementById('random-size-container');
+    this.minSizeSlider = document.getElementById('min-size-slider');
+    this.minSizeValue = document.getElementById('min-size-value');
+    this.maxSizeSlider = document.getElementById('max-size-slider');
+    this.maxSizeValue = document.getElementById('max-size-value');
+    
+    // Get the size slider container (the parent element of the size slider)
+    this.sizeSliderContainer = this.sizeSlider.closest('.slider-container');
+    
     // Appearance tab elements
     this.fadeCheckbox = document.getElementById('fade-checkbox');
     this.colorTransitionCheckbox = document.getElementById('color-transition-checkbox');
@@ -1117,6 +1128,61 @@ export class ParticleUI {
         this.config.onRespawn();
       }
     });
+    
+    // Random size checkbox
+    this.randomSizeCheckbox.addEventListener('change', this.onRandomSizeChange = () => {
+      this.config.randomSize = this.randomSizeCheckbox.checked;
+      
+      if (this.config.randomSize) {
+        this.randomSizeContainer.classList.remove('hidden');
+        // Hide the particle size slider since it has no effect when random size is enabled
+        this.sizeSliderContainer.classList.add('hidden');
+      } else {
+        this.randomSizeContainer.classList.add('hidden');
+        // Show the particle size slider when random size is disabled
+        this.sizeSliderContainer.classList.remove('hidden');
+      }
+      
+      if (this.config.onAppearanceChange) {
+        this.config.onAppearanceChange();
+      }
+    });
+    
+    // Min size slider
+    this.minSizeSlider.addEventListener('input', this.onMinSizeChange = () => {
+      const value = this.minSizeSlider.value;
+      this.minSizeValue.textContent = value;
+      this.config.minSize = parseFloat(value);
+      
+      // Make sure min size is less than max size
+      if (this.config.minSize >= this.config.maxSize) {
+        this.maxSizeSlider.value = this.config.minSize + 0.1;
+        this.maxSizeValue.textContent = this.maxSizeSlider.value;
+        this.config.maxSize = parseFloat(this.maxSizeSlider.value);
+      }
+      
+      if (this.config.onAppearanceChange) {
+        this.config.onAppearanceChange();
+      }
+    });
+    
+    // Max size slider
+    this.maxSizeSlider.addEventListener('input', this.onMaxSizeChange = () => {
+      const value = this.maxSizeSlider.value;
+      this.maxSizeValue.textContent = value;
+      this.config.maxSize = parseFloat(value);
+      
+      // Make sure max size is greater than min size
+      if (this.config.maxSize <= this.config.minSize) {
+        this.minSizeSlider.value = this.config.maxSize - 0.1;
+        this.minSizeValue.textContent = this.minSizeSlider.value;
+        this.config.minSize = parseFloat(this.minSizeSlider.value);
+      }
+      
+      if (this.config.onAppearanceChange) {
+        this.config.onAppearanceChange();
+      }
+    });
   }
 
   removeAllEventListeners() {
@@ -1303,6 +1369,17 @@ export class ParticleUI {
     }
     if (this.onShapeRotationZChange) {
       this.shapeRotationZSlider.removeEventListener('input', this.onShapeRotationZChange);
+    }
+    
+    // Random size controls
+    if (this.onRandomSizeChange) {
+      this.randomSizeCheckbox.removeEventListener('change', this.onRandomSizeChange);
+    }
+    if (this.onMinSizeChange) {
+      this.minSizeSlider.removeEventListener('input', this.onMinSizeChange);
+    }
+    if (this.onMaxSizeChange) {
+      this.maxSizeSlider.removeEventListener('input', this.onMaxSizeChange);
     }
   }
 
@@ -1576,6 +1653,23 @@ export class ParticleUI {
     this.shapeRotationYValue.textContent = `${this.config.shapeRotationY || 0}°`;
     this.shapeRotationZSlider.value = this.config.shapeRotationZ || 0;
     this.shapeRotationZValue.textContent = `${this.config.shapeRotationZ || 0}°`;
+    
+    // Initialize random size controls
+    this.randomSizeCheckbox.checked = this.config.randomSize || false;
+    this.minSizeSlider.value = this.config.minSize || 0.1;
+    this.minSizeValue.textContent = this.config.minSize || 0.1;
+    this.maxSizeSlider.value = this.config.maxSize || 0.5;
+    this.maxSizeValue.textContent = this.config.maxSize || 0.5;
+    
+    if (this.config.randomSize) {
+      this.randomSizeContainer.classList.remove('hidden');
+      // Hide the particle size slider since it has no effect when random size is enabled
+      this.sizeSliderContainer.classList.add('hidden');
+    } else {
+      this.randomSizeContainer.classList.add('hidden');
+      // Show the particle size slider when random size is disabled
+      this.sizeSliderContainer.classList.remove('hidden');
+    }
   }
 
   // Method to remove texture from the current system

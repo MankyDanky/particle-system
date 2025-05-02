@@ -131,6 +131,7 @@ export class ParticleSystem {
   }
 
   updateAppearanceUniform() {
+    console.log(this.config.particleSize, this.config.minSize, this.config.maxSize);
     const appearanceData = new Float32Array([
       this.config.fadeEnabled ? 1.0 : 0.0,
       this.config.colorTransitionEnabled ? 1.0 : 0.0,
@@ -146,7 +147,11 @@ export class ParticleSystem {
       this.config.endColor[0], this.config.endColor[1], this.config.endColor[2], 
       this.config.minRotation || 0.0, // Min rotation in degrees
       this.config.maxRotation || 90.0, // Max rotation in degrees 
-      this.config.aspectRatio || 1.0 // Aspect ratio (width/height)
+      this.config.aspectRatio || 1.0, // Aspect ratio (width/height)
+      this.config.randomSize ? 1.0 : 0.0, // randomSize flag
+      this.config.minSize || 0.1, // Min particle size
+      this.config.maxSize || 0.5, // Max particle size
+      0.0 // padding
     ]);
     
     this.device.queue.writeBuffer(this.appearanceUniformBuffer, 0, appearanceData);
