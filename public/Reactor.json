@@ -3,7 +3,7 @@
   "timestamp": "2025-05-03T03:58:05.233Z",
   "systems": [
     {
-      "name": "System 1",
+      "name": "Core",
       "id": 1,
       "particleCount": 100,
       "lifetime": 5,
@@ -76,7 +76,7 @@
       "maxSpeed": 1
     },
     {
-      "name": "System 2",
+      "name": "Hull",
       "id": 2,
       "particleCount": 100,
       "lifetime": 5,
@@ -141,7 +141,7 @@
       "fadeSizeEnabled": false
     },
     {
-      "name": "System 4",
+      "name": "Leak",
       "id": 4,
       "particleCount": 100,
       "lifetime": 1,

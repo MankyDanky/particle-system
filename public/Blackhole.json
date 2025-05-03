@@ -3,7 +3,7 @@
   "timestamp": "2025-05-03T02:03:33.811Z",
   "systems": [
     {
-      "name": "System 1",
+      "name": "Core",
       "id": 1,
       "particleCount": 100,
       "lifetime": 5,
@@ -66,7 +66,7 @@
       "maxSpeed": 1
     },
     {
-      "name": "System 2",
+      "name": "Edge",
       "id": 2,
       "particleCount": 100,
       "lifetime": 5,
@@ -123,7 +123,7 @@
       "fadeSizeEnabled": false
     },
     {
-      "name": "System 3",
+      "name": "Sparks",
       "id": 3,
       "particleCount": 100,
       "lifetime": 5,
