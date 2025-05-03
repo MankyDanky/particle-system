@@ -1,8 +1,3 @@
-/**
- * Particle emission functionality
- */
-
-// Emission shape implementations
 export class ParticleEmitter {
   constructor(config = {}) {
     this.config = config;
@@ -108,7 +103,6 @@ export class ParticleEmitter {
     const radY = (this.config.shapeRotationY || 0) * Math.PI / 180;
     const radZ = (this.config.shapeRotationZ || 0) * Math.PI / 180;
     
-    // Apply inverse Z-axis rotation (apply in reverse order from applyRotation)
     if (radZ !== 0) {
       const cosZ = Math.cos(-radZ); // Negative angle for inverse
       const sinZ = Math.sin(-radZ);
@@ -268,11 +262,11 @@ export class ParticleEmitter {
       }
     } else {
       // Generate in a solid square
-      posX = (Math.random() * 2 - 1) * outerSize; // -outerSize to outerSize
-      posY = (Math.random() * 2 - 1) * outerSize; // -outerSize to outerSize
+      posX = (Math.random() * 2 - 1) * outerSize; 
+      posY = (Math.random() * 2 - 1) * outerSize; 
     }
     
-    return [posX, posY, 0]; // Flat on XY plane
+    return [posX, posY, 0];
   }
 
   emitFromCircle() {

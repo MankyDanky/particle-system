@@ -11,11 +11,11 @@ export class ParticlePhysics {
       turbulence: 0.0,
       attractorStrength: 0.0,
       attractorPosition: [0.0, 0.0, 0.0],
-      damping: 0.0 // Added damping parameter
+      damping: 0.0 
     };
     
     // Fixed timestep physics system for consistent updates
-    this.fixedDeltaTime = 1.0 / 60.0; // Consistent 60Hz physics updates
+    this.fixedDeltaTime = 1.0 / 60.0; 
     this.physicsClock = 0;
     this.physicsAccumulator = 0;
     

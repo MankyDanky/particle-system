@@ -1,7 +1,3 @@
-/**
- * Particle system core functionality
- */
-
 import { ParticleEmitter } from './particleEmitter.js';
 import { ParticlePhysics } from './particlePhysics.js';
 import { ParticleTextureManager } from './particleTextures.js';
@@ -19,8 +15,8 @@ export class ParticleSystem {
     this.currentEmissionTime = 0;
     
     // Create typed arrays for particle data and velocities
-    this.particleData = new Float32Array(this.MAX_PARTICLES * 8); // [x, y, z, r, g, b, age, lifetime]
-    this.particleVelocities = new Float32Array(this.MAX_PARTICLES * 4); // [vx, vy, vz, padding]
+    this.particleData = new Float32Array(this.MAX_PARTICLES * 8);
+    this.particleVelocities = new Float32Array(this.MAX_PARTICLES * 4); 
     
     // Create GPU buffers for rendering
     this.instanceBuffer = device.createBuffer({
@@ -241,7 +237,6 @@ export class ParticleSystem {
   }
 
   updateParticles(deltaTime) {
-    // Fixed-step physics system - accumulate real time and step at fixed intervals
     this.physics.physicsAccumulator += deltaTime;
     
     // Ensure a minimum update frequency for smoother motion at low emission rates

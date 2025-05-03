@@ -1,7 +1,3 @@
-/**
- * WebGPU initialization and context setup
- */
-
 export async function initWebGPU() {
   if (!navigator.gpu) {
     throw new Error("WebGPU not supported on this browser.");

@@ -1,7 +1,3 @@
-/**
- * UI Tabs functionality
- */
-
 document.addEventListener('DOMContentLoaded', () => {
   // Get all tab buttons and content
   const tabButtons = document.querySelectorAll('.tab-button');

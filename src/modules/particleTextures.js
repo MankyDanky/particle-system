@@ -1,7 +1,3 @@
-/**
- * Particle texture functionality
- */
-
 export class ParticleTextureManager {
   constructor(device) {
     this.device = device;

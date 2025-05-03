@@ -1,7 +1,3 @@
-/**
- * Scene Manager for saving and loading particle system scenes
- * Handles serializing particle systems to JSON and loading them from files
- */
 
 /**
  * Save the current scene to a JSON file

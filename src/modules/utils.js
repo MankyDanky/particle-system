@@ -1,7 +1,3 @@
-/**
- * Utility functions for math operations and other helpers
- */
-
 // Convert hex color to RGB [0-1]
 export function hexToRgb(hex) {
   const r = parseInt(hex.slice(1, 3), 16) / 255;

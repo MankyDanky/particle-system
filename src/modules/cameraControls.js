@@ -1,7 +1,3 @@
-/**
- * Camera controls for handling user interactions with the 3D view
- */
-
 export function setupCameraControls(canvas, config) {
   // Camera control event listeners
   canvas.addEventListener('mousedown', (e) => {

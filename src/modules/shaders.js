@@ -1,7 +1,3 @@
-/**
- * Shader code for various rendering operations
- */
-
 export const particleShader = `
   struct Uniforms {
     transform: mat4x4<f32>,

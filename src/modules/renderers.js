@@ -1,7 +1,3 @@
-/**
- * Renderers module for creating and managing WebGPU render pipelines
- */
-
 import { 
   particleShader, 
   blurShader, 
@@ -167,7 +163,7 @@ export function createRenderPipelines(device, format, layouts) {
           ],
         },
         {
-          arrayStride: 4 * 4, // vec3 velocity + padding
+          arrayStride: 4 * 4,
           stepMode: 'instance',
           attributes: [
             {
