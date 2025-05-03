@@ -246,6 +246,33 @@ async function main() {
     }
   };
   
+  // Setup example scenes functionality
+  function setupExampleScenes() {
+    const exampleItems = document.querySelectorAll('.example-item');
+    
+    exampleItems.forEach(item => {
+      item.addEventListener('click', async () => {
+        const fileName = item.getAttribute('data-file');
+        try {
+          // Fetch the example scene file
+          const response = await fetch(`/public/${fileName}`);
+          if (!response.ok) {
+            throw new Error(`Failed to load example: ${response.statusText}`);
+          }
+          
+          const sceneData = await response.json();
+          
+          // Update the particle systems with the example scene data
+          particleSystemManager.replaceSystems(sceneData);
+          multiSystemUI.updateSystemsList();
+          onSystemSelected(particleSystemManager.activeSystemIndex);
+        } catch (error) {
+          console.error(`Error loading example scene ${fileName}:`, error);
+        }
+      });
+    });
+  }
+  
   function onSystemSelected(index) {
     // Get the configuration of the selected system
     const selectedConfig = particleSystemManager.particleSystems[index].config;
@@ -426,6 +453,9 @@ async function main() {
       }
     });
   }
+  
+  // Setup example scenes
+  setupExampleScenes();
   
   // Initialize particles and start animation
   particleSystemManager.respawnAllSystems();
