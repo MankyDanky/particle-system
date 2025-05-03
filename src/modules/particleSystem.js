@@ -514,6 +514,7 @@ export class ParticleSystemManager {
     this.particleSystems = [];
     this.activeSystemIndex = 0;
     this.systemCounter = 1;
+    this.onSystemCreated = null; // Callback for when a system is created
   }
 
   createParticleSystem(config = {}) {
@@ -534,6 +535,11 @@ export class ParticleSystemManager {
     
     if (this.particleSystems.length === 1) {
       this.activeSystemIndex = 0;
+    }
+    
+    // Call the onSystemCreated callback if it exists
+    if (this.onSystemCreated && typeof this.onSystemCreated === 'function') {
+      this.onSystemCreated(systemId, systemConfig);
     }
     
     return systemId;

@@ -121,6 +121,10 @@ async function main() {
     shapeRotationX: 0,
     shapeRotationY: 0,
     shapeRotationZ: 0,
+    // Shape translation settings
+    shapeTranslationX: 0,
+    shapeTranslationY: 0,
+    shapeTranslationZ: 0,
     // 2D shape settings
     squareSize: 2.0,
     squareInnerSize: 0.0,
@@ -233,6 +237,14 @@ async function main() {
       GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
     );
   }
+  
+  // Add observers for particle system creation/duplication
+  particleSystemManager.onSystemCreated = (systemId, config) => {
+    // Create quad buffer for the newly created system
+    if (!systemQuadBuffers[systemId]) {
+      systemQuadBuffers[systemId] = createQuadBufferForSystem(systemId, config.particleSize);
+    }
+  };
   
   function onSystemSelected(index) {
     // Get the configuration of the selected system

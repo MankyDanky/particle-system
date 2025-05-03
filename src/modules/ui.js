@@ -269,6 +269,14 @@ export class ParticleUI {
     this.shapeRotationYValue = document.getElementById('shape-rotation-y-value');
     this.shapeRotationZValue = document.getElementById('shape-rotation-z-value');
     
+    // Shape translation sliders
+    this.shapeTranslationXSlider = document.getElementById('shape-translation-x-slider');
+    this.shapeTranslationYSlider = document.getElementById('shape-translation-y-slider');
+    this.shapeTranslationZSlider = document.getElementById('shape-translation-z-slider');
+    this.shapeTranslationXValue = document.getElementById('shape-translation-x-value');
+    this.shapeTranslationYValue = document.getElementById('shape-translation-y-value');
+    this.shapeTranslationZValue = document.getElementById('shape-translation-z-value');
+    
     // 3D shape settings
     this.cubeLengthSlider = document.getElementById('cube-length-slider');
     this.cubeLengthValue = document.getElementById('cube-length-value');
@@ -1222,6 +1230,37 @@ export class ParticleUI {
       }
     });
     
+    // Shape translation sliders
+    this.shapeTranslationXSlider.addEventListener('input', this.onShapeTranslationXChange = () => {
+      const value = this.shapeTranslationXSlider.value;
+      this.shapeTranslationXValue.textContent = value;
+      this.config.shapeTranslationX = parseFloat(value);
+      
+      if (this.config.onRespawn) {
+        this.config.onRespawn();
+      }
+    });
+    
+    this.shapeTranslationYSlider.addEventListener('input', this.onShapeTranslationYChange = () => {
+      const value = this.shapeTranslationYSlider.value;
+      this.shapeTranslationYValue.textContent = value;
+      this.config.shapeTranslationY = parseFloat(value);
+      
+      if (this.config.onRespawn) {
+        this.config.onRespawn();
+      }
+    });
+    
+    this.shapeTranslationZSlider.addEventListener('input', this.onShapeTranslationZChange = () => {
+      const value = this.shapeTranslationZSlider.value;
+      this.shapeTranslationZValue.textContent = value;
+      this.config.shapeTranslationZ = parseFloat(value);
+      
+      if (this.config.onRespawn) {
+        this.config.onRespawn();
+      }
+    });
+    
     // Random size checkbox
     this.randomSizeCheckbox.addEventListener('change', this.onRandomSizeChange = () => {
       this.config.randomSize = this.randomSizeCheckbox.checked;
@@ -1471,6 +1510,17 @@ export class ParticleUI {
     }
     if (this.onShapeRotationZChange) {
       this.shapeRotationZSlider.removeEventListener('input', this.onShapeRotationZChange);
+    }
+    
+    // Shape translation sliders
+    if (this.onShapeTranslationXChange) {
+      this.shapeTranslationXSlider.removeEventListener('input', this.onShapeTranslationXChange);
+    }
+    if (this.onShapeTranslationYChange) {
+      this.shapeTranslationYSlider.removeEventListener('input', this.onShapeTranslationYChange);
+    }
+    if (this.onShapeTranslationZChange) {
+      this.shapeTranslationZSlider.removeEventListener('input', this.onShapeTranslationZChange);
     }
     
     // Random size controls
@@ -1765,6 +1815,14 @@ export class ParticleUI {
     this.shapeRotationYValue.textContent = `${this.config.shapeRotationY || 0}°`;
     this.shapeRotationZSlider.value = this.config.shapeRotationZ || 0;
     this.shapeRotationZValue.textContent = `${this.config.shapeRotationZ || 0}°`;
+    
+    // Initialize shape translation sliders
+    this.shapeTranslationXSlider.value = this.config.shapeTranslationX || 0;
+    this.shapeTranslationXValue.textContent = this.config.shapeTranslationX || 0;
+    this.shapeTranslationYSlider.value = this.config.shapeTranslationY || 0;
+    this.shapeTranslationYValue.textContent = this.config.shapeTranslationY || 0;
+    this.shapeTranslationZSlider.value = this.config.shapeTranslationZ || 0;
+    this.shapeTranslationZValue.textContent = this.config.shapeTranslationZ || 0;
     
     // Initialize random size controls
     this.randomSizeCheckbox.checked = this.config.randomSize || false;

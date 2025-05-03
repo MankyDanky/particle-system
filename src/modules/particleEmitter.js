@@ -33,6 +33,13 @@ export class ParticleEmitter {
       [posX, posY, posZ] = this.applyRotation(posX, posY, posZ);
     }
     
+    // Apply shape translation if configured
+    if (this.config.shapeTranslationX || this.config.shapeTranslationY || this.config.shapeTranslationZ) {
+      posX += this.config.shapeTranslationX || 0;
+      posY += this.config.shapeTranslationY || 0;
+      posZ += this.config.shapeTranslationZ || 0;
+    }
+    
     // Store the position
     const particleIndex = index * 8;
     particleData[particleIndex] = posX;
@@ -87,6 +94,48 @@ export class ParticleEmitter {
       const oldY = newY;
       newX = oldX * cosZ - oldY * sinZ;
       newY = oldX * sinZ + oldY * cosZ;
+    }
+    
+    return [newX, newY, newZ];
+  }
+
+  // Helper method: Apply inverse rotation to get back original position before rotation
+  inverseRotation(x, y, z) {
+    let newX = x, newY = y, newZ = z;
+    
+    // Convert degrees to radians
+    const radX = (this.config.shapeRotationX || 0) * Math.PI / 180;
+    const radY = (this.config.shapeRotationY || 0) * Math.PI / 180;
+    const radZ = (this.config.shapeRotationZ || 0) * Math.PI / 180;
+    
+    // Apply inverse Z-axis rotation (apply in reverse order from applyRotation)
+    if (radZ !== 0) {
+      const cosZ = Math.cos(-radZ); // Negative angle for inverse
+      const sinZ = Math.sin(-radZ);
+      const oldX = newX;
+      const oldY = newY;
+      newX = oldX * cosZ - oldY * sinZ;
+      newY = oldX * sinZ + oldY * cosZ;
+    }
+    
+    // Apply inverse Y-axis rotation
+    if (radY !== 0) {
+      const cosY = Math.cos(-radY);
+      const sinY = Math.sin(-radY);
+      const oldX = newX;
+      const oldZ = newZ;
+      newX = oldX * cosY + oldZ * sinY;
+      newZ = -oldX * sinY + oldZ * cosY;
+    }
+    
+    // Apply inverse X-axis rotation
+    if (radX !== 0) {
+      const cosX = Math.cos(-radX);
+      const sinX = Math.sin(-radX);
+      const oldY = newY;
+      const oldZ = newZ;
+      newY = oldY * cosX - oldZ * sinX;
+      newZ = oldY * sinX + oldZ * cosX;
     }
     
     return [newX, newY, newZ];
@@ -281,44 +330,97 @@ export class ParticleEmitter {
   }
 
   calculateVelocity(posX, posY, posZ, velocities, velIndex) {
-    // Create velocity direction
-    const length = Math.sqrt(posX * posX + posY * posY + posZ * posZ);
+    // Get translation values
+    const translateX = this.config.shapeTranslationX || 0;
+    const translateY = this.config.shapeTranslationY || 0;
+    const translateZ = this.config.shapeTranslationZ || 0;
+    
+    // Calculate position relative to the translated origin for direction calculation
+    const relPosX = posX - translateX;
+    const relPosY = posY - translateY;
+    const relPosZ = posZ - translateZ;
+    
+    // Create velocity direction based on position relative to translated origin
+    const length = Math.sqrt(relPosX * relPosX + relPosY * relPosY + relPosZ * relPosZ);
     let dirX, dirY, dirZ;
     
     if (length > 0.0001) {
+      // Get original position (before rotation and translation) based on shape type
+      let origPosX, origPosY, origPosZ;
+      let isDirCalculated = false;
+      
       // For circle shape with tangential velocity direction
       if (this.config.emissionShape === 'circle' && this.config.circleVelocityDirection === 'tangential') {
-        // Create a tangential direction vector (perpendicular to radius vector)
-        // For 2D circle in XY plane, tangent vector is (-y, x, 0)
-        dirX = -posY / length;
-        dirY = posX / length;
-        dirZ = 0;
+        // For circle in XY plane, we need to work with the original unrotated direction
+        // First, calculate the inverse rotation to get back to original space
+        const origPos = this.inverseRotation(relPosX, relPosY, relPosZ);
+        origPosX = origPos[0];
+        origPosY = origPos[1];
+        origPosZ = origPos[2];
+        
+        // Calculate tangential direction in original unrotated space
+        const xyLength = Math.sqrt(origPosX * origPosX + origPosY * origPosY);
+        if (xyLength > 0.0001) {
+          // Create a tangential direction vector (perpendicular to radius vector) in XY plane
+          const tangentX = -origPosY / xyLength;
+          const tangentY = origPosX / xyLength;
+          const tangentZ = 0;
+          
+          // Apply the forward rotation to the tangent to get it in world space
+          const rotatedTangent = this.applyRotation(tangentX, tangentY, tangentZ);
+          dirX = rotatedTangent[0];
+          dirY = rotatedTangent[1];
+          dirZ = rotatedTangent[2];
+          isDirCalculated = true;
+        }
       } 
       // For cylinder with tangential velocity direction
       else if (this.config.emissionShape === 'cylinder' && this.config.cylinderVelocityDirection === 'tangential') {
-        // For a cylinder aligned along Y-axis, tangent to the circular cross section
-        // We compute tangent to the XZ circle (Y is preserved)
-        const xzLength = Math.sqrt(posX * posX + posZ * posZ);
+        // For cylinder aligned along Y-axis, we need to work in original unrotated space
+        const origPos = this.inverseRotation(relPosX, relPosY, relPosZ);
+        origPosX = origPos[0];
+        origPosY = origPos[1];
+        origPosZ = origPos[2];
+        
+        // Compute tangent to the XZ circle in original space
+        const xzLength = Math.sqrt(origPosX * origPosX + origPosZ * origPosZ);
         if (xzLength > 0.0001) {
-          dirX = -posZ / xzLength;
-          dirY = 0; // No Y component in the tangent (parallel to the cylinder axis)
-          dirZ = posX / xzLength;
+          // Create tangent in XZ plane (Y is preserved)
+          const tangentX = -origPosZ / xzLength;
+          const tangentY = 0; // No Y component in the tangent (parallel to the cylinder axis)
+          const tangentZ = origPosX / xzLength;
+          
+          // Apply rotation to the tangent to get it in world space
+          const rotatedTangent = this.applyRotation(tangentX, tangentY, tangentZ);
+          dirX = rotatedTangent[0];
+          dirY = rotatedTangent[1];
+          dirZ = rotatedTangent[2];
+          isDirCalculated = true;
         } else {
           // If on the axis, use random direction in XZ plane
           const randomAngle = Math.random() * Math.PI * 2;
-          dirX = Math.cos(randomAngle);
-          dirY = 0;
-          dirZ = Math.sin(randomAngle);
+          const tangentX = Math.cos(randomAngle);
+          const tangentY = 0;
+          const tangentZ = Math.sin(randomAngle);
+          
+          // Apply rotation to the random tangent
+          const rotatedTangent = this.applyRotation(tangentX, tangentY, tangentZ);
+          dirX = rotatedTangent[0];
+          dirY = rotatedTangent[1];
+          dirZ = rotatedTangent[2];
+          isDirCalculated = true;
         }
       }
-      else {
-        // Default direction away from origin for all other shapes
-        dirX = posX / length;
-        dirY = posY / length;
-        dirZ = posZ / length;
+      
+      // For all other shapes or if tangent calculation failed
+      if (!isDirCalculated) {
+        // Default direction away from translated origin
+        dirX = relPosX / length;
+        dirY = relPosY / length;
+        dirZ = relPosZ / length;
       }
     } else {
-      // If particle is at origin, create a random direction
+      // If particle is at the translated origin, create a random direction
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
       dirX = Math.sin(phi) * Math.cos(theta);
