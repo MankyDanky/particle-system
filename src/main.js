@@ -255,7 +255,7 @@ async function main() {
         const fileName = item.getAttribute('data-file');
         try {
           // Fetch the example scene file
-          const response = await fetch(`/public/${fileName}`);
+          const response = await fetch(`/${fileName}`);
           if (!response.ok) {
             throw new Error(`Failed to load example: ${response.statusText}`);
           }
