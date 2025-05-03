@@ -19,12 +19,19 @@
     <div class="tabs-navigation">
       <button class="tab-button active" data-tab="emission">Emission</button>
       <button class="tab-button" data-tab="shape">Shape</button>
-      <button class="tab-button" data-tab="appearance">Appearance</button>
+      <button class="tab-button" data-tab="appearance">Look</button>
       <button class="tab-button" data-tab="physics">Physics</button>
     </div>
     
     <!-- Emission Tab Content -->
     <div class="tab-content active" id="emission-tab">
+      <h4>Emission</h4>
+      <div class="slider-container">
+        <label for="lifetime-slider">Particle Lifetime:</label>
+        <input type="range" id="lifetime-slider" min="1" max="20" value="5" step="0.5">
+        <span id="lifetime-value">5 sec</span>
+      </div>
+
       <div class="checkbox-container">
         <input type="checkbox" id="burst-checkbox">
         <label for="burst-checkbox">Burst Mode (Instant Emission)</label>
@@ -55,6 +62,7 @@
     
     <!-- Shape Tab Content -->
     <div class="tab-content" id="shape-tab">
+      <h4>Emission Shape</h4>
       <div class="dropdown-container">
         <label for="emission-shape">Emission Shape:</label>
         <select id="emission-shape">
@@ -232,7 +240,7 @@
     
     <!-- Appearance Tab Content -->
     <div class="tab-content" id="appearance-tab">
-      
+      <h4>Size</h4>
       <div class="checkbox-container">
         <input type="checkbox" id="fade-size-checkbox">
         <label for="fade-size-checkbox">Fade Size Over Lifetime</label>
@@ -266,7 +274,7 @@
         <input type="range" id="aspect-ratio-slider" min="0.1" max="10.0" value="1.0" step="0.1">
         <span id="aspect-ratio-value">1.0</span>
       </div>
-      
+      <h4>Opacity</h4>
       <div class="checkbox-container">
         <input type="checkbox" id="fade-checkbox" checked>
         <label for="fade-checkbox">Fade Out Over Lifetime</label>
@@ -277,7 +285,7 @@
         <input type="range" id="opacity-slider" min="0" max="1" value="1" step="0.01">
         <span id="opacity-value">1.0</span>
       </div>
-      
+      <h4>Color</h4>
       <div class="checkbox-container">
         <input type="checkbox" id="color-transition-checkbox">
         <label for="color-transition-checkbox">Color Over Lifetime</label>
@@ -295,7 +303,7 @@
         <label for="end-color" style="width: auto; margin-left: 10px;">End Color:</label>
         <input type="color" id="end-color" class="color-input" value="#0066ff">
       </div>
-      
+      <h4>Bloom</h4>
       <div class="checkbox-container">
         <input type="checkbox" id="bloom-checkbox" checked>
         <label for="bloom-checkbox">Enable Bloom Effect</label>
@@ -336,12 +344,8 @@
     
     <!-- Physics Tab Content -->
     <div class="tab-content" id="physics-tab">
-      <div class="slider-container">
-        <label for="lifetime-slider">Particle Lifetime:</label>
-        <input type="range" id="lifetime-slider" min="1" max="20" value="5" step="0.5">
-        <span id="lifetime-value">5 sec</span>
-      </div>
       
+      <h4>Basic</h4>
       <div class="checkbox-container">
         <input type="checkbox" id="random-speed-checkbox">
         <label for="random-speed-checkbox">Use Random Speed</label>
@@ -370,7 +374,7 @@
       </div>
       
       <div class="velocity-override-container">
-        <h4>Velocity Direction Override</h4>
+        <h4>Velocity Direction Overrides</h4>
         
         <div class="axis-control">
           <div class="axis-control-row">
@@ -414,7 +418,7 @@
           </div>
         </div>
       </div>
-      
+      <h4>Gravity</h4>
       <div class="checkbox-container">
         <input type="checkbox" id="gravity-checkbox">
         <label for="gravity-checkbox">Enable Gravity</label>
@@ -425,7 +429,7 @@
         <input type="range" id="gravity-strength-slider" min="-10" max="10" value="2" step="0.1">
         <span id="gravity-strength-value">2</span>
       </div>
-      
+      <h4>Damping</h4>
       <div class="checkbox-container">
         <input type="checkbox" id="damping-checkbox">
         <label for="damping-checkbox">Enable Damping</label>
@@ -436,7 +440,7 @@
         <input type="range" id="damping-strength-slider" min="0.1" max="5" value="0.5" step="0.1">
         <span id="damping-strength-value">0.5</span>
       </div>
-      
+      <h4>Attractor</h4>
       <div class="checkbox-container">
         <input type="checkbox" id="attractor-checkbox">
         <label for="attractor-checkbox">Enable Attractor</label>

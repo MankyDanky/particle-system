@@ -104,10 +104,6 @@ label {
     font-size: 13px;
 }
 
-.shape-settings {
-    margin-left: 20px;
-}
-
 /* Unified button styles */
 button {
     border: none;
@@ -299,6 +295,10 @@ input[type="range"]::-moz-range-thumb {
     font-size: 14px;
 }
 
+h4 {
+    margin: 0;
+}
+
 .texture-container {
     margin-top: 10px;
 }
@@ -421,24 +421,6 @@ input[type="range"]::-moz-range-thumb {
   margin-top: 15px;
   border-top: 1px solid rgba(255, 255, 255, 0.2);
   padding-top: 15px;
-}
-
-.attractor-controls h4 {
-  margin: 10px 0;
-  font-weight: 500;
-  font-size: 14px;
-}
-
-.velocity-override-container {
-  margin-top: 15px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-  padding-top: 15px;
-}
-
-.velocity-override-container h4 {
-  margin: 0 0 10px 0;
-  font-weight: 500;
-  font-size: 14px;
 }
 
 .axis-control {
