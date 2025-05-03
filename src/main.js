@@ -168,14 +168,19 @@ async function main() {
     
     // Default name for the first system
     name: 'System 1',
-    
+    randomSpeed: false,
+    minSpeed: 0.1,
+    maxSpeed: 1.0,
     // Callback methods for UI interactions - will be updated later
     onAppearanceChange: null,
     onColorChange: null,
     onSizeChange: null,
     onSpeedChange: null,
     onBloomIntensityChange: null,
-    onRespawn: null
+    onRespawn: null,
+    fadeSizeEnabled: false,
+    opacity: 1.0,
+
   };
   
   // Create buffers

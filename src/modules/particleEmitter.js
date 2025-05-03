@@ -326,23 +326,33 @@ export class ParticleEmitter {
       dirZ = Math.cos(phi);
     }
     
+    // Determine particle speed (random or fixed)
+    let particleSpeed;
+    if (this.config.randomSpeed) {
+      // Use random speed between min and max speed
+      particleSpeed = (this.config.minSpeed || 0) + Math.random() * ((this.config.maxSpeed || 1) - (this.config.minSpeed || 0));
+    } else {
+      // Use fixed speed
+      particleSpeed = this.config.particleSpeed;
+    }
+    
     // Store velocity vector (scaled by speed)
     if (this.config.overrideXVelocity) {
       velocities[velIndex] = this.config.xVelocity;
     } else {
-      velocities[velIndex] = dirX * this.config.particleSpeed;
+      velocities[velIndex] = dirX * particleSpeed;
     }
     
     if (this.config.overrideYVelocity) {
       velocities[velIndex + 1] = this.config.yVelocity;
     } else {
-      velocities[velIndex + 1] = dirY * this.config.particleSpeed;
+      velocities[velIndex + 1] = dirY * particleSpeed;
     }
     
     if (this.config.overrideZVelocity) {
       velocities[velIndex + 2] = this.config.zVelocity;
     } else {
-      velocities[velIndex + 2] = dirZ * this.config.particleSpeed;
+      velocities[velIndex + 2] = dirZ * particleSpeed;
     }
     
     velocities[velIndex + 3] = 0; // padding

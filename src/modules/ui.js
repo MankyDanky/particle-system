@@ -169,6 +169,15 @@ export class ParticleUI {
     this.aspectRatioValue = document.getElementById('aspect-ratio-value');
     this.speedSlider = document.getElementById('speed-slider');
     this.speedValue = document.getElementById('speed-value');
+    this.speedSliderContainer = document.getElementById('speed-slider-container');
+    
+    // Random speed UI elements
+    this.randomSpeedCheckbox = document.getElementById('random-speed-checkbox');
+    this.randomSpeedContainer = document.getElementById('random-speed-container');
+    this.minSpeedSlider = document.getElementById('min-speed-slider');
+    this.minSpeedValue = document.getElementById('min-speed-value');
+    this.maxSpeedSlider = document.getElementById('max-speed-slider');
+    this.maxSpeedValue = document.getElementById('max-speed-value');
     
     // Random size UI elements
     this.randomSizeCheckbox = document.getElementById('random-size-checkbox');
@@ -177,15 +186,12 @@ export class ParticleUI {
     this.minSizeValue = document.getElementById('min-size-value');
     this.maxSizeSlider = document.getElementById('max-size-slider');
     this.maxSizeValue = document.getElementById('max-size-value');
-
-    // Fade size checkbox
-    this.fadeSizeCheckbox = document.getElementById('fade-size-checkbox');
-    
-    // Get the size slider container (the parent element of the size slider)
     this.sizeSliderContainer = this.sizeSlider.closest('.slider-container');
+    
     
     // Appearance tab elements
     this.fadeCheckbox = document.getElementById('fade-checkbox');
+    this.fadeSizeCheckbox = document.getElementById('fade-size-checkbox');
     
     // Opacity slider elements
     this.opacitySlider = document.getElementById('opacity-slider');
@@ -616,6 +622,61 @@ export class ParticleUI {
       const value = this.speedSlider.value;
       this.speedValue.textContent = value;
       this.config.particleSpeed = parseFloat(value);
+      
+      if (this.config.onSpeedChange) {
+        this.config.onSpeedChange();
+      }
+    });
+    
+    // Random Speed checkbox
+    this.randomSpeedCheckbox.addEventListener('change', this.onRandomSpeedChange = () => {
+      this.config.randomSpeed = this.randomSpeedCheckbox.checked;
+      
+      if (this.config.randomSpeed) {
+        this.randomSpeedContainer.classList.remove('hidden');
+        // Hide the particle speed slider since it has no effect when random speed is enabled
+        this.speedSliderContainer.classList.add('hidden');
+      } else {
+        this.randomSpeedContainer.classList.add('hidden');
+        // Show the particle speed slider when random speed is disabled
+        this.speedSliderContainer.classList.remove('hidden');
+      }
+      
+      if (this.config.onSpeedChange) {
+        this.config.onSpeedChange();
+      }
+    });
+    
+    // Min speed slider
+    this.minSpeedSlider.addEventListener('input', this.onMinSpeedChange = () => {
+      const value = this.minSpeedSlider.value;
+      this.minSpeedValue.textContent = value;
+      this.config.minSpeed = parseFloat(value);
+      
+      // Make sure min speed is less than max speed
+      if (this.config.minSpeed >= this.config.maxSpeed) {
+        this.maxSpeedSlider.value = this.config.minSpeed + 0.1;
+        this.maxSpeedValue.textContent = this.maxSpeedSlider.value;
+        this.config.maxSpeed = parseFloat(this.maxSpeedSlider.value);
+      }
+      
+      if (this.config.onSpeedChange) {
+        this.config.onSpeedChange();
+      }
+    });
+    
+    // Max speed slider
+    this.maxSpeedSlider.addEventListener('input', this.onMaxSpeedChange = () => {
+      const value = this.maxSpeedSlider.value;
+      this.maxSpeedValue.textContent = value;
+      this.config.maxSpeed = parseFloat(value);
+      
+      // Make sure max speed is greater than min speed
+      if (this.config.maxSpeed <= this.config.minSpeed) {
+        this.minSpeedSlider.value = this.config.maxSpeed - 0.1;
+        this.minSpeedValue.textContent = this.minSpeedSlider.value;
+        this.config.minSpeed = parseFloat(this.minSpeedSlider.value);
+      }
       
       if (this.config.onSpeedChange) {
         this.config.onSpeedChange();
@@ -1252,6 +1313,15 @@ export class ParticleUI {
     if (this.onSpeedChange) {
       this.speedSlider.removeEventListener('input', this.onSpeedChange);
     }
+    if (this.onRandomSpeedChange) {
+      this.randomSpeedCheckbox.removeEventListener('change', this.onRandomSpeedChange);
+    }
+    if (this.onMinSpeedChange) {
+      this.minSpeedSlider.removeEventListener('input', this.onMinSpeedChange);
+    }
+    if (this.onMaxSpeedChange) {
+      this.maxSpeedSlider.removeEventListener('input', this.onMaxSpeedChange);
+    }
     if (this.onParticleCountChange) {
       this.particleCountSlider.removeEventListener('input', this.onParticleCountChange);
     }
@@ -1725,6 +1795,23 @@ export class ParticleUI {
       this.opacitySliderContainer.classList.add('hidden');
     } else {
       this.opacitySliderContainer.classList.remove('hidden');
+    }
+    
+    // Initialize random speed controls
+    this.randomSpeedCheckbox.checked = this.config.randomSpeed || false;
+    this.minSpeedSlider.value = this.config.minSpeed || 0.1;
+    this.minSpeedValue.textContent = this.config.minSpeed || 0.1;
+    this.maxSpeedSlider.value = this.config.maxSpeed || 1.0;
+    this.maxSpeedValue.textContent = this.config.maxSpeed || 1.0;
+    
+    if (this.config.randomSpeed) {
+      this.randomSpeedContainer.classList.remove('hidden');
+      // Hide the particle speed slider since it has no effect when random speed is enabled
+      this.speedSliderContainer.classList.add('hidden');
+    } else {
+      this.randomSpeedContainer.classList.add('hidden');
+      // Show the particle speed slider when random speed is disabled
+      this.speedSliderContainer.classList.remove('hidden');
     }
   }
 

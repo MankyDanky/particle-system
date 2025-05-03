@@ -76,7 +76,10 @@ export function saveScene(particleSystemManager) {
         minSize: config.minSize,
         maxSize: config.maxSize,
         fadeSizeEnabled: config.fadeSizeEnabled,
-        opacity: config.opacity
+        opacity: config.opacity,
+        randomSpeed: config.randomSpeed,
+        minSpeed: config.minSpeed,
+        maxSpeed: config.maxSpeed,
       })),
       activeSystemIndex: particleSystemManager.activeSystemIndex
     };

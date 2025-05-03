@@ -320,10 +320,31 @@
         <span id="lifetime-value">5 sec</span>
       </div>
       
-      <div class="slider-container">
+      <div class="checkbox-container">
+        <input type="checkbox" id="random-speed-checkbox">
+        <label for="random-speed-checkbox">Use Random Speed</label>
+      </div>
+      
+      <div class="slider-container" id="speed-slider-container">
         <label for="speed-slider">Particle Speed:</label>
         <input type="range" id="speed-slider" min="0" max="10" value="1" step="0.1">
         <span id="speed-value">1</span>
+      </div>
+      
+      
+      
+      <div id="random-speed-container" class="hidden">
+        <div class="slider-container">
+          <label for="min-speed-slider">Min Speed:</label>
+          <input type="range" id="min-speed-slider" min="0" max="10" value="0.5" step="0.1">
+          <span id="min-speed-value">0.5</span>
+        </div>
+        
+        <div class="slider-container">
+          <label for="max-speed-slider">Max Speed:</label>
+          <input type="range" id="max-speed-slider" min="0" max="10" value="2" step="0.1">
+          <span id="max-speed-value">2</span>
+        </div>
       </div>
       
       <div class="velocity-override-container">
