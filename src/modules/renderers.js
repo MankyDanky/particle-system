@@ -187,12 +187,12 @@ export function createRenderPipelines(device, format, layouts) {
         blend: {
           color: {
             srcFactor: 'src-alpha',
-            dstFactor: 'one',
+            dstFactor: 'one-minus-src-alpha',
             operation: 'add',
           },
           alpha: {
             srcFactor: 'one',
-            dstFactor: 'one',
+            dstFactor: 'one-minus-src-alpha',
             operation: 'add',
           },
         },
@@ -203,7 +203,7 @@ export function createRenderPipelines(device, format, layouts) {
       cullMode: 'none',
     },
     depthStencil: {
-      depthWriteEnabled: true,
+      depthWriteEnabled: false, 
       depthCompare: 'less',
       format: 'depth24plus',
     },
