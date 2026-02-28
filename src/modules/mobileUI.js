@@ -17,12 +17,30 @@ export function initMobileUI() {
   const systemsClose = document.getElementById('systems-close');
   const examplesClose = document.getElementById('examples-close');
   
+  // All toggle buttons for hiding/showing
+  const allToggleButtons = [controlsToggle, systemsToggle, examplesToggle];
+  
+  // Helper function to show all toggle buttons
+  function showAllToggleButtons() {
+    allToggleButtons.forEach(btn => {
+      if (btn) btn.style.display = '';
+    });
+  }
+  
+  // Helper function to hide all toggle buttons
+  function hideAllToggleButtons() {
+    allToggleButtons.forEach(btn => {
+      if (btn) btn.style.display = 'none';
+    });
+  }
+  
   // Helper function to close all panels
   function closeAllPanels() {
     controlsPanel?.classList.remove('mobile-visible');
     systemsPanel?.classList.remove('mobile-visible');
     examplesPanel?.classList.remove('mobile-visible');
     overlay?.classList.remove('active');
+    showAllToggleButtons();
   }
   
   // Helper function to open a panel
@@ -30,6 +48,7 @@ export function initMobileUI() {
     closeAllPanels();
     panel?.classList.add('mobile-visible');
     overlay?.classList.add('active');
+    hideAllToggleButtons();
   }
   
   // Toggle button event listeners
