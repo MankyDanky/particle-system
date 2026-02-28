@@ -1,5 +1,5 @@
 # Particle System with WebGPU
-I made a particle system maker with WebGPU and JavaScript. I used compute shaders for the physics and GPU instancing for rendering to optomize performance. 
+I made a particle system maker with WebGPU and JavaScript. I used compute shaders for the physics and GPU instancing for rendering to optimize performance. 
 
 # Deployment
 Checkout the project at https://particles.onl
