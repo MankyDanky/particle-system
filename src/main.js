@@ -8,6 +8,10 @@ import { ParticleUI, MultiSystemUI} from "./modules/ui.js";
 import { setupCameraControls } from "./modules/cameraControls.js";
 import "./modules/tabs.js"; 
 import { saveScene, loadScene } from "./modules/sceneManager.js";
+import { initMobileUI } from "./modules/mobileUI.js";
+
+// Initialize mobile UI when DOM is ready
+document.addEventListener('DOMContentLoaded', initMobileUI);
 
 async function main() {
   // Initialize WebGPU

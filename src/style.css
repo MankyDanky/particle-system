@@ -5,12 +5,15 @@ html, body {
     width: 100vw;
     height: 100vh;
     font-family: 'Poppins', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
 }
 
 canvas {
     display: block;
     width: 100%;
     height: 100%;
+    touch-action: none;
 }
 
 /* Common panel styles for both controls and particle systems list */
@@ -25,6 +28,9 @@ canvas {
     max-height: 90vh;
     overflow-y: auto;
     width: 240px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
 }
 
 .controls {
@@ -527,4 +533,441 @@ h4 {
 
 .example-item:active {
   transform: scale(0.98);
+}
+
+/* Mobile Toggle Buttons */
+.mobile-toggle {
+  display: none;
+  position: fixed;
+  z-index: 100;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s, background-color 0.2s;
+}
+
+/* CSS hamburger icon */
+.hamburger-icon {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background-color: white;
+  position: relative;
+}
+
+.hamburger-icon::before,
+.hamburger-icon::after {
+  content: '';
+  display: block;
+  width: 18px;
+  height: 2px;
+  background-color: white;
+  position: absolute;
+  left: 0;
+}
+
+.hamburger-icon::before {
+  top: -6px;
+}
+
+.hamburger-icon::after {
+  top: 6px;
+}
+
+.mobile-toggle:hover {
+  background-color: rgba(30, 30, 30, 0.9);
+  transform: scale(1.05);
+}
+
+.mobile-toggle:active {
+  transform: scale(0.95);
+}
+
+.mobile-toggle.controls-toggle {
+  top: 10px;
+  left: 10px;
+}
+
+.mobile-toggle.systems-toggle {
+  top: 10px;
+  right: 10px;
+}
+
+/* SVG gear icon */
+.gear-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.mobile-toggle.examples-toggle {
+  bottom: 80px;
+  right: 10px;
+}
+
+/* Mobile close button for panels */
+.mobile-close {
+  display: none;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0;
+  z-index: 5;
+}
+
+.mobile-close:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ========== RESPONSIVE STYLES ========== */
+
+/* Tablet and smaller laptops */
+@media screen and (max-width: 1024px) {
+  .controls, .particle-systems-list {
+    width: 220px;
+    padding: 12px;
+  }
+  
+  .examples-panel {
+    width: 200px;
+    padding: 12px;
+  }
+  
+  label {
+    width: 130px;
+    font-size: 13px;
+  }
+  
+  .tab-button {
+    font-size: 11px;
+    padding: 6px 0;
+  }
+}
+
+/* Mobile devices - landscape and larger phones */
+@media screen and (max-width: 768px) {
+  /* Show mobile toggle buttons */
+  .mobile-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .mobile-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Hide panels by default on mobile */
+  .controls, .particle-systems-list, .examples-panel {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    max-height: 100vh;
+    max-height: 100dvh;
+    width: 85%;
+    max-width: 320px;
+    border-radius: 0;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+    z-index: 50;
+    padding-top: 50px;
+  }
+  
+  .controls {
+    left: 0;
+  }
+  
+  .particle-systems-list {
+    right: 0;
+    left: auto;
+    transform: translateX(100%);
+  }
+  
+  .examples-panel {
+    right: 0;
+    left: auto;
+    bottom: 0;
+    top: auto;
+    max-height: 60vh;
+    width: 100%;
+    max-width: 100%;
+    transform: translateY(100%);
+    border-radius: 15px 15px 0 0;
+    padding-top: 20px;
+  }
+  
+  /* Show panels when active */
+  .controls.mobile-visible {
+    transform: translateX(0);
+  }
+  
+  .particle-systems-list.mobile-visible {
+    transform: translateX(0);
+  }
+  
+  .examples-panel.mobile-visible {
+    transform: translateY(0);
+  }
+  
+  /* Overlay when panel is open */
+  .mobile-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 40;
+  }
+  
+  .mobile-overlay.active {
+    display: block;
+  }
+  
+  /* Adjust play button for mobile */
+  .play-button-container {
+    bottom: 15px;
+  }
+  
+  .play-button {
+    padding: 12px 40px;
+    font-size: 15px;
+  }
+  
+  /* Adjust controls layout */
+  .controls h3, .particle-systems-list h3, .examples-panel h3 {
+    font-size: 18px;
+    margin-bottom: 10px;
+  }
+  
+  label {
+    width: 100%;
+    display: block;
+    margin-bottom: 5px;
+    font-size: 13px;
+  }
+  
+  .slider-container {
+    margin: 10px 0;
+  }
+  
+  .checkbox-container label {
+    width: auto;
+    display: inline;
+  }
+  
+  .color-container {
+    flex-wrap: wrap;
+  }
+  
+  .color-container label {
+    width: auto;
+    margin-right: 10px;
+  }
+  
+  .dropdown-container {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .dropdown-container select {
+    width: 100%;
+    margin-top: 5px;
+  }
+  
+  /* Tab buttons for mobile */
+  .tabs-navigation {
+    flex-wrap: wrap;
+  }
+  
+  .tab-button {
+    flex: 1 1 45%;
+    font-size: 12px;
+    padding: 8px 5px;
+    margin: 2px;
+    border-radius: 4px;
+  }
+  
+  /* Particle systems buttons */
+  .particle-systems-buttons {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  
+  .particle-systems-button {
+    flex: 1 1 30%;
+    margin: 0;
+    padding: 8px 5px;
+    font-size: 12px;
+  }
+  
+  .file-operations {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .save-load-button, .custom-file-upload {
+    width: 100%;
+  }
+  
+  /* Examples panel on mobile */
+  .examples-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+  
+  .example-item {
+    flex: 1 1 45%;
+    max-width: 45%;
+  }
+  
+  /* Adjust control row for texture */
+  .control-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .control-row label {
+    margin-bottom: 8px;
+  }
+  
+  /* Velocity override controls */
+  .axis-control-row {
+    flex-wrap: wrap;
+  }
+}
+
+/* Small mobile devices - portrait phones */
+@media screen and (max-width: 480px) {
+  .mobile-toggle {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+  
+  .controls, .particle-systems-list {
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .tab-button {
+    flex: 1 1 48%;
+    font-size: 11px;
+    padding: 7px 3px;
+  }
+  
+  .play-button {
+    padding: 10px 30px;
+    font-size: 14px;
+  }
+  
+  .play-button-container {
+    bottom: 10px;
+  }
+  
+  /* Adjust heading sizes */
+  .controls h3, .particle-systems-list h3, .examples-panel h3 {
+    font-size: 16px;
+  }
+  
+  h4 {
+    font-size: 13px;
+  }
+  
+  label, .checkbox-container label {
+    font-size: 12px;
+  }
+  
+  input[type="range"] {
+    height: 8px;
+  }
+  
+  input[type="range"]::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+  }
+  
+  input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+  }
+  
+  /* Better touch targets for checkboxes */
+  .checkbox-container input {
+    width: 20px;
+    height: 20px;
+  }
+  
+  /* Examples layout */
+  .example-item {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+  
+  .particle-systems-button {
+    padding: 10px 5px;
+  }
+  
+  .particle-systems-list li {
+    padding: 12px 10px;
+  }
+}
+
+/* Very small screens */
+@media screen and (max-width: 360px) {
+  .controls, .particle-systems-list, .examples-panel {
+    padding: 10px;
+    padding-top: 45px;
+  }
+  
+  .tab-button {
+    font-size: 10px;
+  }
+}
+
+/* Landscape mode for mobile */
+@media screen and (max-height: 500px) and (orientation: landscape) {
+  .controls, .particle-systems-list {
+    padding-top: 40px;
+  }
+  
+  .examples-panel {
+    max-height: 80vh;
+  }
+  
+  .slider-container {
+    margin: 8px 0;
+  }
+  
+  .checkbox-container {
+    margin: 8px 0;
+  }
+  
+  .play-button-container {
+    bottom: 10px;
+  }
+  
+  .play-button {
+    padding: 8px 25px;
+    font-size: 13px;
+  }
 }
